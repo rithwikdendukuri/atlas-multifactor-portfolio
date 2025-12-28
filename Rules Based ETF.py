@@ -1,3 +1,15 @@
+"""
+Rules-Based Multi-Factor Equity Portfolio
+
+Monthly rebalanced, equal-weighted portfolio constructed from a fixed universe
+of large-cap U.S. equities using momentum, valuation, profitability, growth,
+and risk factors. Performance is evaluated relative to SPY using both gross
+and net-of-transaction-cost returns.
+
+This implementation is intended as a methodological prototype and not as a
+live trading strategy.
+"""
+
 from __future__ import annotations
 
 import warnings
@@ -259,3 +271,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
