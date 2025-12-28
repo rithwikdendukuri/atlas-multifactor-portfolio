@@ -84,3 +84,26 @@ To reproduce the results:
 ```bash
 pip install -r requirements.txt
 python rules_based_etf.py
+
+```
+## Limitations
+
+This project is based on historical backtesting and does not reflect
+live trading performance. Transaction costs, taxes, slippage, and
+market impact are not incorporated in the baseline results.
+
+Fundamental variables are treated as static and are not point-in-time,
+which may introduce look-ahead bias. The equity universe is fixed and
+does not account for index reconstitution, delistings, or survivorship
+effects. As with all backtests, results are sensitive to modeling
+assumptions and data quality.
+
+---
+
+## Disclaimer
+
+This repository and its contents are provided solely for research and
+educational purposes. Nothing contained herein constitutes financial,
+investment, or trading advice. Past performance is not indicative of
+future results.
+
