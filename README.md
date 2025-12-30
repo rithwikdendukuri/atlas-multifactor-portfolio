@@ -1,4 +1,4 @@
-# Rules-Based Multi-Factor Equity Portfolio
+# Atlas Multi-factor ETF Portfolio
 
 This repository contains a rules-based equity portfolio prototype that applies a multi-factor ranking framework to a fixed universe of large-cap U.S. stocks. The strategy combines price-based and fundamental signals, rebalances monthly, and evaluates performance relative to the S&P 500 using both gross and net-of-cost returns.
 
