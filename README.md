@@ -10,7 +10,7 @@ The project is designed as a methodological prototype, emphasizing transparency,
 
 - Universe: 50 large-cap U.S. equities  
 - Portfolio size: Top 30 ranked stocks  
-- Rebalance frequency: Monthly  
+- Rebalance frequency: Monthly  .
 - Weighting: Equal-weighted with drift between rebalances  
 - Benchmark: SPDR S&P 500 ETF (SPY)  
 - Backtest period: January 2016 – present  
@@ -104,7 +104,7 @@ pip install yfinance pandas numpy matplotlib
 
 ## Run
 
-python rules_based_etf.py
+python atlas-multifactor-etf.py
 
 When executed, the script will:
 1. Download historical adjusted price data for all securities in the universe
