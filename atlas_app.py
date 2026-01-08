@@ -118,6 +118,41 @@ def apply_mode_theme(advanced: bool) -> None:
           color: var(--text) !important;
           border-bottom:2px solid var(--accent) !important;
         }
+        /* ---- Advanced mode: make inputs readable ---- */
+[data-testid="stTextInput"] input,
+[data-testid="stTextArea"] textarea,
+[data-testid="stNumberInput"] input,
+[data-testid="stSelectbox"] div[role="combobox"],
+[data-testid="stMultiSelect"] div[role="combobox"]{
+  background: rgba(255,255,255,0.06) !important;
+  color: var(--text) !important;
+  border: 1px solid rgba(255,255,255,0.22) !important;
+  border-radius: 12px !important;
+}
+
+/* placeholder text */
+[data-testid="stTextInput"] input::placeholder,
+[data-testid="stTextArea"] textarea::placeholder{
+  color: rgba(243,246,255,0.55) !important;
+}
+
+/* dropdown menu panel */
+div[role="listbox"]{
+  background: #0f1730 !important;
+  border: 1px solid rgba(255,255,255,0.18) !important;
+}
+div[role="option"]{
+  color: var(--text) !important;
+}
+div[role="option"]:hover{
+  background: rgba(122,162,255,0.18) !important;
+}
+
+/* slider / checkbox/toggle labels already white, but dim the help text */
+small, .stCaption{
+  color: rgba(207,215,255,0.75) !important;
+}
+
         </style>
         """
     else:
