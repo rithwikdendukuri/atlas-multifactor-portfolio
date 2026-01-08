@@ -45,12 +45,14 @@ DEFAULT_HIGH_Q = 0.67
 
 APP_VERSION = "Atlas"
 
+NAVY_TEXT = "#0b1633"
+
 
 def apply_mode_theme(advanced: bool) -> None:
     if advanced:
-        css = """
+        css = f"""
         <style>
-        :root{
+        :root{{
           --bg:#0b1020;
           --panel:#0f1730;
           --text:#f3f6ff;
@@ -58,207 +60,157 @@ def apply_mode_theme(advanced: bool) -> None:
           --muted2:#aeb9e8;
           --accent:#7aa2ff;
           --border:rgba(255,255,255,0.14);
-          --border2:rgba(255,255,255,0.24);
           --shadow:rgba(0,0,0,0.35);
-          --field:rgba(255,255,255,0.08);
-          --field2:rgba(255,255,255,0.11);
-        }
+        }}
 
-        .stApp{
+        .stApp{{
           background:
             radial-gradient(1200px 600px at 15% 10%, rgba(122,162,255,0.26), transparent 60%),
             radial-gradient(900px 500px at 90% 15%, rgba(0,255,180,0.11), transparent 55%),
             var(--bg);
           color:var(--text);
-        }
+        }}
 
-        html, body, [class*="css"]{
+        html, body, [class*="css"]{{
           color:var(--text) !important;
           -webkit-font-smoothing: antialiased;
           -moz-osx-font-smoothing: grayscale;
-        }
+        }}
 
-        /* Make ALL plain text follow the dark theme */
-        .stMarkdown, .stMarkdown p, .stMarkdown li, .stMarkdown span,
-        .stText, .stCaption, .stAlert, .stInfo, .stWarning, .stError, .stSuccess,
-        [data-testid="stMetricValue"], [data-testid="stMetricLabel"]{
-          color: var(--text) !important;
-        }
-        .stCaption, .stMarkdown small{
-          color: rgba(207,215,255,0.82) !important;
-        }
+        .stMarkdown p, .stMarkdown li, .stMarkdown span {{ color: var(--text) !important; }}
+        .stCaption, .stMarkdown small {{ color: rgba(207,215,255,0.82) !important; }}
 
-        [data-testid="stSidebar"]{
+        [data-testid="stSidebar"]{{
           background: linear-gradient(180deg, rgba(15,23,48,0.98), rgba(8,12,26,0.98));
           border-right:1px solid var(--border);
-        }
-        [data-testid="stSidebar"] *{ color:var(--text) !important; }
-        [data-testid="stSidebar"] .stCaption{ color:rgba(174,185,232,0.85) !important; }
+        }}
+        [data-testid="stSidebar"] *{{ color:var(--text) !important; }}
 
         label, .stTextInput label, .stSelectbox label, .stNumberInput label,
-        .stSlider label, .stRadio label, .stCheckbox label, .stToggle label{
+        .stSlider label, .stRadio label, .stCheckbox label, .stToggle label{{
           color: var(--text) !important;
           font-weight: 650;
-        }
+        }}
 
-        /* Primary buttons */
-        .stButton>button{
+        .stButton>button{{
           background: linear-gradient(180deg, rgba(122,162,255,1.0), rgba(88,129,255,1.0));
           color:#0b1020 !important;
           border:1px solid rgba(255,255,255,0.16);
           border-radius:14px;
           box-shadow:0 10px 25px var(--shadow);
           font-weight:800;
-        }
-        .stButton>button:hover{ filter:brightness(1.05); transform:translateY(-1px); }
+        }}
 
-        /* Metrics / cards */
-        [data-testid="stMetric"]{
+        [data-testid="stMetric"]{{
           background: rgba(255,255,255,0.06);
           border:1px solid var(--border);
           border-radius:16px;
           padding:12px 12px;
           box-shadow:0 10px 25px var(--shadow);
-        }
-        [data-testid="stMetric"] *{ color: var(--text) !important; }
-        [data-testid="stMetricLabel"]{ color: rgba(207,215,255,0.82) !important; }
+        }}
+        [data-testid="stMetric"] *{{ color: var(--text) !important; }}
 
-        /* Dataframe container */
-        [data-testid="stDataFrame"]{
+        [data-testid="stDataFrame"]{{
           background: rgba(255,255,255,0.04);
           border:1px solid var(--border);
           border-radius:16px;
           padding:6px;
           box-shadow:0 10px 25px var(--shadow);
-        }
+        }}
 
-        details{
+        details{{
           background: rgba(255,255,255,0.04);
           border:1px solid var(--border);
           border-radius:16px;
           padding:8px 12px;
-        }
+        }}
 
-        /* Tabs */
-        button[role="tab"]{ color: rgba(207,215,255,0.75) !important; }
-        button[role="tab"][aria-selected="true"]{
+        button[role="tab"]{{ color: rgba(207,215,255,0.75) !important; }}
+        button[role="tab"][aria-selected="true"]{{
           color: var(--text) !important;
           border-bottom:2px solid var(--accent) !important;
-        }
+        }}
 
-        /* --------------------------
-           INPUTS: stop white-on-white
-           -------------------------- */
+        /* -----------------------------------------------------------------
+           FIX: sidebar inputs show white box + white text in some versions.
+           Force NAVY text inside all input boxes / selects / number inputs.
+           ----------------------------------------------------------------- */
 
-        /* Most text inputs */
-        [data-testid="stTextInput"] input,
-        [data-testid="stTextArea"] textarea,
-        [data-testid="stNumberInput"] input{
-          background: var(--field) !important;
-          color: var(--text) !important;
-          border: 1px solid var(--border2) !important;
+        /* Streamlit testid inputs */
+        [data-testid="stSidebar"] [data-testid="stTextInput"] input,
+        [data-testid="stSidebar"] [data-testid="stTextArea"] textarea,
+        [data-testid="stSidebar"] [data-testid="stNumberInput"] input{{
+          background: #ffffff !important;
+          color: {NAVY_TEXT} !important;
+          -webkit-text-fill-color: {NAVY_TEXT} !important;
+          border: 1px solid rgba(15,23,42,0.18) !important;
           border-radius: 12px !important;
-          caret-color: var(--text) !important;
-        }
+          caret-color: {NAVY_TEXT} !important;
+        }}
 
-        /* BaseWeb (selectbox, multiselect, date input, etc.) */
-        [data-baseweb="select"] > div,
-        [data-baseweb="input"] > div,
-        [data-baseweb="textarea"] > div,
-        [data-baseweb="popover"]{
-          background: var(--field) !important;
-          border: 1px solid var(--border2) !important;
+        [data-testid="stSidebar"] [data-testid="stTextInput"] input::placeholder,
+        [data-testid="stSidebar"] [data-testid="stTextArea"] textarea::placeholder{{
+          color: rgba(11,22,51,0.55) !important;
+          -webkit-text-fill-color: rgba(11,22,51,0.55) !important;
+        }}
+
+        /* BaseWeb inputs/selects used by Streamlit (covers selectbox & some number inputs) */
+        [data-testid="stSidebar"] [data-baseweb="input"] input,
+        [data-testid="stSidebar"] [data-baseweb="textarea"] textarea{{
+          background: #ffffff !important;
+          color: {NAVY_TEXT} !important;
+          -webkit-text-fill-color: {NAVY_TEXT} !important;
+          caret-color: {NAVY_TEXT} !important;
+        }}
+
+        [data-testid="stSidebar"] [data-baseweb="select"] *{{
+          color: {NAVY_TEXT} !important;
+          -webkit-text-fill-color: {NAVY_TEXT} !important;
+          fill: {NAVY_TEXT} !important;
+        }}
+
+        [data-testid="stSidebar"] [data-baseweb="select"] > div{{
+          background: #ffffff !important;
+          border: 1px solid rgba(15,23,42,0.18) !important;
           border-radius: 12px !important;
-          color: var(--text) !important;
-        }
+        }}
 
-        /* Select / multiselect visible field */
-        [data-testid="stSelectbox"] div[role="combobox"],
-        [data-testid="stMultiSelect"] div[role="combobox"]{
-          background: var(--field) !important;
-          border: 1px solid var(--border2) !important;
-          border-radius: 12px !important;
-          color: var(--text) !important;
-        }
-        [data-testid="stSelectbox"] div[role="combobox"] *,
-        [data-testid="stMultiSelect"] div[role="combobox"] *{
-          color: var(--text) !important;
-          fill: var(--text) !important;
-        }
-
-        /* Placeholder text */
-        [data-testid="stTextInput"] input::placeholder,
-        [data-testid="stTextArea"] textarea::placeholder{
-          color: rgba(243,246,255,0.58) !important;
-        }
-        [data-baseweb="input"] input::placeholder{
-          color: rgba(243,246,255,0.58) !important;
-        }
+        /* Combobox role (some Streamlit builds) */
+        [data-testid="stSidebar"] div[role="combobox"],
+        [data-testid="stSidebar"] div[role="combobox"] *{{
+          background: #ffffff !important;
+          color: {NAVY_TEXT} !important;
+          -webkit-text-fill-color: {NAVY_TEXT} !important;
+          fill: {NAVY_TEXT} !important;
+        }}
 
         /* Dropdown menu */
-        div[role="listbox"]{
-          background: rgba(15,23,48,0.98) !important;
-          border: 1px solid rgba(255,255,255,0.18) !important;
+        div[role="listbox"]{{
+          background: #ffffff !important;
+          border: 1px solid rgba(15,23,42,0.18) !important;
           border-radius: 12px !important;
-        }
-        div[role="option"]{
-          color: var(--text) !important;
+        }}
+        div[role="option"]{{
+          color: {NAVY_TEXT} !important;
           background: transparent !important;
-        }
-        div[role="option"]:hover{
-          background: rgba(122,162,255,0.18) !important;
-        }
+        }}
+        div[role="option"]:hover{{
+          background: rgba(37,99,235,0.12) !important;
+        }}
 
-        /* Multiselect tags */
-        [data-baseweb="tag"]{
-          background: rgba(255,255,255,0.10) !important;
-          border: 1px solid rgba(255,255,255,0.20) !important;
-          color: var(--text) !important;
-        }
-        [data-baseweb="tag"] *{
-          color: var(--text) !important;
-          fill: var(--text) !important;
-        }
-
-        /* Slider (value + ticks) */
-        [data-testid="stSlider"] *{
-          color: var(--text) !important;
-        }
-
-        /* Download buttons (fix white text on white button) */
-        [data-testid="stDownloadButton"] > button{
-          background: rgba(255,255,255,0.10) !important;
+        /* Download buttons */
+        [data-testid="stDownloadButton"] > button{{
+          background: rgba(255,255,255,0.12) !important;
           color: var(--text) !important;
           border: 1px solid rgba(255,255,255,0.22) !important;
           border-radius: 14px !important;
           font-weight: 800 !important;
           box-shadow: 0 10px 22px var(--shadow) !important;
-        }
-        [data-testid="stDownloadButton"] > button *{
+        }}
+        [data-testid="stDownloadButton"] > button *{{
           color: var(--text) !important;
           fill: var(--text) !important;
-        }
-        [data-testid="stDownloadButton"] > button:hover{
-          background: rgba(255,255,255,0.14) !important;
-          transform: translateY(-1px);
-        }
-
-        /* Some Streamlit versions render "secondary" buttons in white */
-        button[kind="secondary"], button[kind="secondary"] *{
-          color: var(--text) !important;
-          fill: var(--text) !important;
-        }
-        button[kind="secondary"]{
-          background: rgba(255,255,255,0.10) !important;
-          border: 1px solid rgba(255,255,255,0.22) !important;
-          border-radius: 14px !important;
-        }
-
-        /* Checkboxes/toggles/radios inner text */
-        [data-testid="stCheckbox"] *, [data-testid="stRadio"] *, [data-testid="stToggle"] *{
-          color: var(--text) !important;
-          fill: var(--text) !important;
-        }
+        }}
         </style>
         """
     else:
@@ -541,7 +493,6 @@ def backtest(
             stayed = sorted(set(picks) & set(prev))
 
         turn = turnover(prev, picks)
-        turns.append(turn)
 
         holdings_log_rows.append({
             "rebalance_date": pd.Timestamp(d0).date().isoformat(),
@@ -556,6 +507,7 @@ def backtest(
         })
 
         prev = picks
+        turns.append(turn)
 
         period = prices.loc[d0:d1, picks].pct_change().dropna(how="all")
         if period.empty:
@@ -716,23 +668,19 @@ with st.sidebar:
 st.title("Atlas")
 st.caption("A rules-based stock ranking model with a backtest and a volatility view.")
 
-with st.container():
-    st.subheader("What this is")
-    st.markdown(
-        """
+st.subheader("What this is")
+st.markdown(
+    """
 Atlas lets you test a simple idea: rank stocks with a few measurable signals, hold the top names, and rebalance on a schedule.
 
-**In plain terms**
-- Start with a list of well-known U.S. stocks
-- Score each stock using value, profitability, growth, and risk
-- Hold the highest-ranked stocks, equal-weighted
-- Rebalance over time and compare to any benchmark you choose
-
-Use it to explore how different settings change results, and how performance looks when markets are calm vs volatile (using VIX).
+- Pick a universe of stocks (or use the default list)
+- Choose how often to rebalance and how many holdings to keep
+- Compare the result to any benchmark ticker you want
+- See how results change when volatility is low vs high (using VIX)
 
 This uses historical data and is for learning and research.
-        """.strip()
-    )
+    """.strip()
+)
 
 if not run:
     st.info("Choose settings in the sidebar, then click **Run**.")
