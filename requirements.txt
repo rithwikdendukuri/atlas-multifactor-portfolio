@@ -1,4 +1,6 @@
+streamlit
 yfinance
 mathplotlib
 numpy
 pandas
+openpyxl
