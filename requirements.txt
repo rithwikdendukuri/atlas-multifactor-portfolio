@@ -1,6 +1,6 @@
 streamlit
 yfinance
-mathplotlib
+matplotlib
 numpy
 pandas
 openpyxl
