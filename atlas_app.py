@@ -14,7 +14,26 @@ warnings.filterwarnings("ignore")
 plt.rcParams["figure.dpi"] = 140
 
 # =========================
-# Defaults (same methodology)
+# Atlas Portfolio Dashboard
+# =========================
+#
+# Motivation
+# ----------
+# Atlas started as a personal project at the intersection of accounting and quantitative finance.
+# Accounting taught me to respect how fundamentals connect to real business performance. Quant finance
+# taught me to express ideas as transparent rules, test them on historical data, and learn from results.
+#
+# I’ve always wanted to build an “ETF-like” strategy: a systematic, rules-based portfolio that explains
+# what it owns, why it owns it, and how it behaves in different market environments. This dashboard is a
+# research prototype that demonstrates that process end-to-end: factor scoring, rebalancing, turnover/costs,
+# and a volatility-regime view using VIX.
+#
+# Important: This is an educational/research tool, not financial advice and not a live trading system.
+# Data is provided by public sources via yfinance and may contain gaps or inaccuracies.
+#
+
+# =========================
+# Defaults (match original methodology)
 # =========================
 
 DEFAULT_TICKERS: List[str] = [
@@ -26,7 +45,6 @@ DEFAULT_TICKERS: List[str] = [
 ]
 
 DEFAULT_BENCHMARK = "SPY"
-
 DEFAULT_TOP_N = 30
 DEFAULT_REBALANCE = "M"
 
@@ -48,7 +66,7 @@ DEFAULT_VIX_SMOOTH_DAYS = 63
 DEFAULT_LOW_Q = 0.33
 DEFAULT_HIGH_Q = 0.67
 
-APP_VERSION = "Atlas v1.0 (Streamlit)"
+APP_VERSION = "Atlas Portfolio Dashboard"
 
 
 # =========================
@@ -56,64 +74,89 @@ APP_VERSION = "Atlas v1.0 (Streamlit)"
 # =========================
 
 def apply_mode_theme(advanced: bool) -> None:
+    """
+    Streamlit can't switch its native theme at runtime, but we can restyle the app with CSS.
+    Beginner mode: clean and bright. Advanced mode: darker, higher-contrast analytics style.
+    """
     if advanced:
         css = """
         <style>
-        :root {
-          --bg: #0b1020;
-          --panel: #111a33;
-          --text: #e8ecff;
-          --muted: #aab3d6;
-          --accent: #7aa2ff;
-          --accent2: #00ffb4;
-          --border: rgba(255,255,255,0.10);
-          --shadow: rgba(0,0,0,0.35);
+        :root{
+          --bg:#0b1020;
+          --panel:#0f1730;
+          --text:#f3f6ff;
+          --muted:#cfd7ff;
+          --muted2:#aeb9e8;
+          --accent:#7aa2ff;
+          --border:rgba(255,255,255,0.12);
+          --shadow:rgba(0,0,0,0.35);
         }
-        .stApp {
-          background: radial-gradient(1200px 600px at 15% 10%, rgba(122,162,255,0.25), transparent 60%),
-                      radial-gradient(900px 500px at 90% 15%, rgba(0,255,180,0.10), transparent 55%),
-                      var(--bg);
-          color: var(--text);
+        .stApp{
+          background:
+            radial-gradient(1200px 600px at 15% 10%, rgba(122,162,255,0.26), transparent 60%),
+            radial-gradient(900px 500px at 90% 15%, rgba(0,255,180,0.11), transparent 55%),
+            var(--bg);
+          color:var(--text);
         }
-        [data-testid="stSidebar"] {
-          background: linear-gradient(180deg, rgba(17,26,51,0.95), rgba(10,16,32,0.95));
-          border-right: 1px solid var(--border);
+        html, body, [class*="css"]{
+          color:var(--text) !important;
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
         }
-        [data-testid="stSidebar"] * { color: var(--text) !important; }
-        .stCaption, .stMarkdown p { color: var(--muted) !important; }
-        .stButton>button {
-          background: linear-gradient(180deg, rgba(122,162,255,0.95), rgba(88,129,255,0.95));
-          color: #0b1020 !important;
-          border: 1px solid rgba(255,255,255,0.10);
-          border-radius: 14px;
-          box-shadow: 0 10px 25px var(--shadow);
-          font-weight: 800;
+        .stMarkdown p, .stMarkdown li, .stMarkdown span { color: var(--text) !important; }
+        .stCaption, .stMarkdown small { color: var(--muted) !important; }
+
+        [data-testid="stSidebar"]{
+          background: linear-gradient(180deg, rgba(15,23,48,0.98), rgba(8,12,26,0.98));
+          border-right:1px solid var(--border);
         }
-        .stButton>button:hover { filter: brightness(1.05); transform: translateY(-1px); }
-        [data-testid="stMetric"] {
-          background: rgba(255,255,255,0.05);
-          border: 1px solid var(--border);
-          border-radius: 16px;
-          padding: 12px 12px;
-          box-shadow: 0 10px 25px var(--shadow);
-        }
-        [data-testid="stDataFrame"] {
-          background: rgba(255,255,255,0.03);
-          border: 1px solid var(--border);
-          border-radius: 16px;
-          padding: 6px;
-          box-shadow: 0 10px 25px var(--shadow);
-        }
-        details {
-          background: rgba(255,255,255,0.03);
-          border: 1px solid var(--border);
-          border-radius: 16px;
-          padding: 8px 12px;
-        }
-        button[role="tab"] { color: var(--muted) !important; }
-        button[role="tab"][aria-selected="true"] {
+        [data-testid="stSidebar"] *{ color:var(--text) !important; }
+        [data-testid="stSidebar"] .stCaption{ color:var(--muted2) !important; }
+
+        label, .stTextInput label, .stSelectbox label, .stNumberInput label, .stSlider label {
           color: var(--text) !important;
-          border-bottom: 2px solid var(--accent) !important;
+          font-weight: 650;
+        }
+
+        .stButton>button{
+          background: linear-gradient(180deg, rgba(122,162,255,1.0), rgba(88,129,255,1.0));
+          color:#0b1020 !important;
+          border:1px solid rgba(255,255,255,0.12);
+          border-radius:14px;
+          box-shadow:0 10px 25px var(--shadow);
+          font-weight:800;
+        }
+        .stButton>button:hover{ filter:brightness(1.05); transform:translateY(-1px); }
+
+        [data-testid="stMetric"]{
+          background: rgba(255,255,255,0.06);
+          border:1px solid var(--border);
+          border-radius:16px;
+          padding:12px 12px;
+          box-shadow:0 10px 25px var(--shadow);
+        }
+        [data-testid="stMetric"] *{ color: var(--text) !important; }
+        [data-testid="stMetricLabel"]{ color: var(--muted) !important; }
+
+        [data-testid="stDataFrame"]{
+          background: rgba(255,255,255,0.04);
+          border:1px solid var(--border);
+          border-radius:16px;
+          padding:6px;
+          box-shadow:0 10px 25px var(--shadow);
+        }
+
+        details{
+          background: rgba(255,255,255,0.04);
+          border:1px solid var(--border);
+          border-radius:16px;
+          padding:8px 12px;
+        }
+
+        button[role="tab"]{ color: var(--muted) !important; }
+        button[role="tab"][aria-selected="true"]{
+          color: var(--text) !important;
+          border-bottom:2px solid var(--accent) !important;
         }
         </style>
         """
@@ -124,32 +167,38 @@ def apply_mode_theme(advanced: bool) -> None:
           --bg:#ffffff; --panel:#f7f8fb; --text:#0f172a; --muted:#475569;
           --accent:#2563eb; --border:rgba(15,23,42,0.10); --shadow:rgba(15,23,42,0.06);
         }
-        .stApp { background: var(--bg); color: var(--text); }
-        [data-testid="stSidebar"] { background: var(--panel); border-right: 1px solid var(--border); }
-        .stCaption, .stMarkdown p { color: var(--muted) !important; }
-        .stButton>button {
+        .stApp{ background: var(--bg); color: var(--text); }
+        [data-testid="stSidebar"]{ background: var(--panel); border-right:1px solid var(--border); }
+        .stCaption, .stMarkdown p{ color: var(--muted) !important; }
+        .stButton>button{
           background: var(--accent);
-          color: #ffffff !important;
-          border: 1px solid var(--border);
-          border-radius: 12px;
-          font-weight: 800;
+          color:#ffffff !important;
+          border:1px solid var(--border);
+          border-radius:12px;
+          font-weight:800;
         }
         [data-testid="stMetric"]{
-          background:#ffffff; border:1px solid var(--border); border-radius:14px;
-          padding:12px 12px; box-shadow:0 10px 20px var(--shadow);
+          background:#ffffff;
+          border:1px solid var(--border);
+          border-radius:14px;
+          padding:12px 12px;
+          box-shadow:0 10px 20px var(--shadow);
         }
         [data-testid="stDataFrame"]{
-          background:#ffffff; border:1px solid var(--border); border-radius:14px;
-          padding:6px; box-shadow:0 10px 20px var(--shadow);
+          background:#ffffff;
+          border:1px solid var(--border);
+          border-radius:14px;
+          padding:6px;
+          box-shadow:0 10px 20px var(--shadow);
         }
-        details { background:#ffffff; border:1px solid var(--border); border-radius:14px; padding:8px 12px; }
+        details{ background:#ffffff; border:1px solid var(--border); border-radius:14px; padding:8px 12px; }
         </style>
         """
     st.markdown(css, unsafe_allow_html=True)
 
 
 # =========================
-# Helpers
+# Utilities
 # =========================
 
 def safe_float(x) -> float:
@@ -201,6 +250,11 @@ def clean_ticker_list(text: str) -> List[str]:
             seen.add(t)
     return uniq
 
+
+# =========================
+# Metrics
+# =========================
+
 def annualized_return(r: pd.Series) -> float:
     return (1 + r).prod() ** (252 / len(r)) - 1 if len(r) > 0 else np.nan
 
@@ -236,21 +290,9 @@ def cagr(equity: pd.Series) -> float:
     years = days / 365.25
     return float(equity.iloc[-1] ** (1 / years) - 1)
 
-def rolling_vol(r: pd.Series, window: int = 63) -> pd.Series:
-    return r.rolling(window).std() * np.sqrt(252)
-
-def rolling_sharpe(r: pd.Series, window: int = 63) -> pd.Series:
-    sd = r.rolling(window).std()
-    mu = r.rolling(window).mean()
-    out = (mu / sd) * np.sqrt(252)
-    return out.replace([np.inf, -np.inf], np.nan)
-
-def safe_bar_series(s: pd.Series) -> pd.Series:
-    return s.replace([np.inf, -np.inf], np.nan).fillna(0.0)
-
 
 # =========================
-# Cached data access
+# Data access (cached)
 # =========================
 
 @st.cache_data(show_spinner=False)
@@ -287,7 +329,7 @@ def fetch_fundamentals(tickers: List[str]) -> pd.DataFrame:
 
 
 # =========================
-# Model logic (unchanged)
+# Factors + scoring (same logic)
 # =========================
 
 def compute_price_factors(prices: pd.DataFrame, mom_lb: int, vol_lb: int):
@@ -331,6 +373,11 @@ def make_scores_full(
     )
     out["mom_z"] = out["z_mom_12m"]
     return out
+
+
+# =========================
+# Backtest (same logic)
+# =========================
 
 def turnover(prev: Optional[List[str]], curr: List[str]) -> float:
     if prev is None:
@@ -433,6 +480,11 @@ def backtest(
         rebal_dates=rebal_dates,
     )
 
+
+# =========================
+# VIX regimes (same definition; better alignment)
+# =========================
+
 def compute_vix_regimes(vix_close: pd.Series, smooth_days: int, low_q: float, high_q: float) -> pd.Series:
     vix_smooth = vix_close.rolling(smooth_days).mean().dropna()
     lo_thr = float(vix_smooth.quantile(low_q))
@@ -468,6 +520,11 @@ def safe_regime_row(label: str, p: pd.Series, b: pd.Series, min_days: int = 30) 
         }
     return regime_stats(label, p, b)
 
+
+# =========================
+# Plots / exports
+# =========================
+
 def equity_df(gross: pd.Series, net: pd.Series, bench: pd.Series) -> pd.DataFrame:
     return pd.DataFrame({
         "Portfolio (Gross)": (1 + gross).cumprod(),
@@ -487,113 +544,78 @@ def equity_fig(df: pd.DataFrame) -> plt.Figure:
     plt.tight_layout()
     return fig
 
-def drawdowns_series(equity: pd.Series) -> pd.Series:
+def drawdown_series(equity: pd.Series) -> pd.Series:
     peak = equity.cummax()
     return equity / peak - 1.0
 
-def make_download_buttons(eq: pd.DataFrame, holdings_changes: pd.DataFrame, regime_export: pd.DataFrame):
-    st.subheader("Downloads")
-    st.caption("Export results for a write-up or deeper analysis.")
-
-    st.download_button(
-        "Equity curve CSV",
-        data=eq.to_csv(index=True).encode("utf-8"),
-        file_name="equity_curves.csv",
-        mime="text/csv",
-    )
-    st.download_button(
-        "Regime summary CSV",
-        data=regime_export.to_csv(index=False).encode("utf-8"),
-        file_name="regime_summary.csv",
-        mime="text/csv",
-    )
-
-    try:
-        from io import BytesIO
-        bio = BytesIO()
-        with pd.ExcelWriter(bio, engine="openpyxl") as writer:
-            holdings_changes.to_excel(writer, index=False, sheet_name="holdings_changes")
-        st.download_button(
-            "Holdings log (Excel)",
-            data=bio.getvalue(),
-            file_name="holdings_changes.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
-    except Exception:
-        st.caption("Excel export needs openpyxl.")
-
 
 # =========================
-# App
+# App UI
 # =========================
 
 st.set_page_config(page_title="Atlas Portfolio", layout="wide")
 
-# Sidebar first so theme applies immediately
 with st.sidebar:
     st.caption(APP_VERSION)
-    beginner = st.toggle("Beginner mode", value=True, help="Beginner = guided + simple. Advanced = full controls + pro theme.")
+
+    beginner = st.toggle("Beginner mode", value=True, help="Beginner keeps controls minimal. Advanced shows full controls.")
     advanced = not beginner
     apply_mode_theme(advanced)
 
-    st.subheader("1) Style")
-    preset = st.selectbox("Preset", ["Balanced", "Conservative", "Aggressive", "Custom"], index=0)
+    st.subheader("Settings")
 
-    st.subheader("2) Date range")
-    if beginner:
-        start = st.text_input("Start", value="2017-01-01")
-        end_in = st.text_input("End (optional)", value="")
-    else:
-        start = st.text_input("Start (YYYY-MM-DD)", value="2016-01-01")
-        end_in = st.text_input("End (blank=today)", value="")
+    profile = st.selectbox("Profile", ["Balanced", "Conservative", "Aggressive", "Custom"], index=0)
+
+    st.write("")
+    st.markdown("**Date range**")
+    start = st.text_input("Start", value="2017-01-01" if beginner else "2016-01-01")
+    end_in = st.text_input("End (optional)", value="")
     end = None if end_in.strip() == "" else end_in.strip()
 
-    st.subheader("3) Portfolio")
-    if beginner:
-        rebalance_label = st.selectbox("Rebalance", ["Monthly", "Quarterly"], index=0)
-        top_n = st.slider("Holdings (TOP N)", 10, 50, DEFAULT_TOP_N)
-    else:
-        rebalance_label = st.selectbox("Rebalance", ["Monthly", "Quarterly", "Weekly"], index=0)
-        top_n = st.slider("Holdings (TOP N)", 5, 50, DEFAULT_TOP_N)
-
+    st.write("")
+    st.markdown("**Portfolio**")
+    rebalance_label = st.selectbox("Rebalance", ["Monthly", "Quarterly"] if beginner else ["Monthly", "Quarterly", "Weekly"], index=0)
     rebalance = {"Monthly": "M", "Quarterly": "Q", "Weekly": "W"}[rebalance_label]
 
-    tc = st.number_input("Costs (bps / 100% turnover)", 0.0, 200.0, float(DEFAULT_TC_BPS_PER_100_TURNOVER), 1.0)
+    top_n = st.slider("Holdings (TOP N)", 10 if beginner else 5, 50, DEFAULT_TOP_N)
+    tc = st.number_input("Trading costs (bps / 100% turnover)", 0.0, 200.0, float(DEFAULT_TC_BPS_PER_100_TURNOVER), 1.0)
 
-    st.subheader("4) Benchmark + regimes")
+    st.write("")
+    st.markdown("**Benchmark & regimes**")
     benchmark = st.text_input("Benchmark", value=DEFAULT_BENCHMARK)
-    vix_ticker = st.text_input("VIX", value=DEFAULT_VIX_TICKER)
+    vix_ticker = st.text_input("VIX ticker", value=DEFAULT_VIX_TICKER)
 
     if beginner:
         vix_smooth = DEFAULT_VIX_SMOOTH_DAYS
         low_q = DEFAULT_LOW_Q
         high_q = DEFAULT_HIGH_Q
-        st.caption("Regimes use 3-month VIX smoothing.")
     else:
-        vix_smooth = st.number_input("VIX smooth days", 5, 252, int(DEFAULT_VIX_SMOOTH_DAYS), 1)
-        low_q = st.slider("Low quantile", 0.05, 0.49, float(DEFAULT_LOW_Q), 0.01)
-        high_q = st.slider("High quantile", 0.51, 0.95, float(DEFAULT_HIGH_Q), 0.01)
+        vix_smooth = st.number_input("VIX smoothing (days)", 5, 252, int(DEFAULT_VIX_SMOOTH_DAYS), 1)
+        low_q = st.slider("Low regime quantile", 0.05, 0.49, float(DEFAULT_LOW_Q), 0.01)
+        high_q = st.slider("High regime quantile", 0.51, 0.95, float(DEFAULT_HIGH_Q), 0.01)
 
-    st.subheader("5) Factor weights")
+    st.write("")
+    st.markdown("**Factor weights**")
     auto_norm = st.toggle("Normalize weights", value=True)
 
     w = dict(DEFAULT_WEIGHTS)
-    if preset == "Conservative":
+    if profile == "Conservative":
         w = {"value_pe": 0.15, "profit_roe": 0.15, "growth_rev": 0.15, "risk_vol": 0.30, "risk_de": 0.25}
-    elif preset == "Aggressive":
+    elif profile == "Aggressive":
         w = {"value_pe": 0.15, "profit_roe": 0.30, "growth_rev": 0.30, "risk_vol": 0.15, "risk_de": 0.10}
 
-    if preset == "Custom" or advanced:
-        w["value_pe"] = st.slider("Valuation (lower P/E)", 0.0, 1.0, float(w["value_pe"]), 0.05)
-        w["profit_roe"] = st.slider("Profitability (higher ROE)", 0.0, 1.0, float(w["profit_roe"]), 0.05)
-        w["growth_rev"] = st.slider("Growth (higher rev growth)", 0.0, 1.0, float(w["growth_rev"]), 0.05)
-        w["risk_vol"] = st.slider("Lower volatility", 0.0, 1.0, float(w["risk_vol"]), 0.05)
-        w["risk_de"] = st.slider("Lower debt", 0.0, 1.0, float(w["risk_de"]), 0.05)
+    if profile == "Custom" or advanced:
+        w["value_pe"] = st.slider("Valuation (P/E)", 0.0, 1.0, float(w["value_pe"]), 0.05)
+        w["profit_roe"] = st.slider("Profitability (ROE)", 0.0, 1.0, float(w["profit_roe"]), 0.05)
+        w["growth_rev"] = st.slider("Growth (revenue)", 0.0, 1.0, float(w["growth_rev"]), 0.05)
+        w["risk_vol"] = st.slider("Risk (volatility)", 0.0, 1.0, float(w["risk_vol"]), 0.05)
+        w["risk_de"] = st.slider("Risk (debt)", 0.0, 1.0, float(w["risk_de"]), 0.05)
 
     weights = normalize_weights(w) if auto_norm else w
     st.caption(f"Weight sum: {sum(weights.values()):.2f}")
 
-    st.subheader("6) Universe")
+    st.write("")
+    st.markdown("**Universe**")
     edit_universe = st.toggle("Edit tickers", value=False)
     if edit_universe:
         tickers_text = st.text_area("Tickers", ", ".join(DEFAULT_TICKERS), height=120)
@@ -602,52 +624,57 @@ with st.sidebar:
         tickers = DEFAULT_TICKERS
 
     st.divider()
-    run = st.button("Run", type="primary")
+    run = st.button("Run analysis", type="primary")
 
-# Header / status
-st.title("Atlas Portfolio")
-st.caption("Rules-based multi-factor portfolio prototype vs SPY, with VIX regime sensitivity.")
 
-# Guided quick-start banner (beginner only, clean + admissions-friendly)
+# =========================
+# Page header
+# =========================
+
+st.title("Atlas Portfolio Dashboard")
+st.caption("A transparent, rules-based portfolio built from fundamentals and price behavior, compared to SPY.")
+
+with st.expander("Project background", expanded=False):
+    st.markdown(
+        """
+Atlas is a personal research project inspired by two interests:
+
+- **Accounting fundamentals:** understanding profitability, growth, and balance-sheet strength  
+- **Quantitative finance:** turning an idea into clear rules and testing it with data  
+
+The goal was to create an **ETF-like** framework: a portfolio that is systematic, explainable, and easy to inspect.
+This dashboard shows the full workflow—how stocks are scored, how the portfolio changes over time, and how results
+look in calm versus volatile markets (using VIX).
+
+This is a research prototype for education and exploration, not investment advice.
+        """.strip()
+    )
+
 if not run:
-    left, right = st.columns([1.4, 0.6])
-    with left:
-        st.markdown(
-            """
-### Quick start
-1) Leave defaults  
-2) Click **Run**  
-3) Open **Holdings** to see how the model picks stocks  
-4) Open **VIX regimes** to see calm vs turbulent market behavior
-            """.strip()
-        )
-        with st.expander("What is this doing?"):
-            st.markdown(
-                """
-- Each rebalance date, every stock gets a **score** from factor z-scores  
-- The app buys the **top-ranked N** stocks and holds them equally weighted  
-- It compares performance to **SPY** and measures turnover + costs  
-- Then it splits performance by **VIX regimes** (low vs high volatility)
-                """.strip()
-            )
-    with right:
-        st.info("Tip: Use **Conservative** preset to see risk-focused behavior.")
+    st.info("Choose settings in the sidebar, then click **Run analysis**.")
     st.stop()
 
+# =========================
 # Validation
+# =========================
+
 if len(tickers) < 5:
-    st.error("Please use at least 5 tickers.")
-    st.stop()
-if top_n > len(tickers):
-    st.error("TOP N cannot exceed number of tickers.")
+    st.error("Please provide at least 5 tickers.")
     st.stop()
 
-# Pipeline with clear diagnostics
-with st.spinner("Downloading prices..."):
+if top_n > len(tickers):
+    st.error("Holdings (TOP N) cannot exceed the number of tickers.")
+    st.stop()
+
+# =========================
+# Run pipeline
+# =========================
+
+with st.spinner("Downloading price data..."):
     prices = download_prices(tickers, start, end)
 
 if prices.empty or prices.shape[0] < 80:
-    st.error("Not enough price data. Try a later start date or fewer tickers.")
+    st.error("Not enough price data for the selected window. Try a later start date.")
     st.stop()
 
 missing_px = [t for t in tickers if t not in prices.columns]
@@ -658,12 +685,12 @@ if missing_px:
         + (" ..." if len(missing_px) > 10 else "")
     )
 
-with st.spinner("Downloading benchmark..."):
+with st.spinner("Downloading benchmark data..."):
     bench_df = download_prices([benchmark], start, end)
     bench_px = bench_df[benchmark] if benchmark in bench_df.columns else None
 
 if bench_px is None or bench_px.dropna().empty:
-    st.error("Benchmark data not found. Try SPY.")
+    st.error("Benchmark price data not found. Try SPY.")
     st.stop()
 
 with st.spinner("Fetching fundamentals snapshot..."):
@@ -671,7 +698,7 @@ with st.spinner("Fetching fundamentals snapshot..."):
 
 fund_missing_rate = float(fundamentals.isna().mean().mean())
 if fund_missing_rate > 0.6:
-    st.warning("Many fundamentals are missing (data source limitation). Interpret results cautiously.")
+    st.warning("Many fundamentals are missing (data source limitation). Results are still shown, but interpret cautiously.")
 
 with st.spinner("Running backtest..."):
     out = backtest(
@@ -687,80 +714,61 @@ with st.spinner("Running backtest..."):
     )
 
 if out.gross.empty or out.net.empty:
-    st.error("No returns were produced. Try a later start date (e.g., 2019-01-01) or Monthly rebalance.")
+    st.error("No returns were produced. Try a later start date or Monthly rebalancing.")
     st.stop()
 
 eq = equity_df(out.gross, out.net, out.bench)
 net_equity = eq["Portfolio (Net of Costs)"]
 
-# Status bar (admissions-polish)
-status1, status2, status3, status4 = st.columns(4)
-status1.metric("Universe", f"{len(prices.columns)} stocks")
-status2.metric("Window", f"{safe_date_str(eq.index.min())} → {safe_date_str(eq.index.max())}")
-status3.metric("Rebalance", rebalance_label)
-status4.metric("Preset", preset)
+# Status bar
+s1, s2, s3, s4 = st.columns(4)
+s1.metric("Universe size", f"{len(prices.columns)}")
+s2.metric("Date range", f"{safe_date_str(eq.index.min())} → {safe_date_str(eq.index.max())}")
+s3.metric("Rebalance", rebalance_label)
+s4.metric("Profile", profile)
 
-# Tabs (tight, professional)
-tab_overview, tab_risk, tab_holdings, tab_regimes, tab_downloads, tab_method = st.tabs(
-    ["Overview", "Risk", "Holdings", "VIX regimes", "Downloads", "Method"]
+# Tabs
+tab_overview, tab_holdings, tab_regimes, tab_downloads, tab_method = st.tabs(
+    ["Overview", "Holdings", "VIX regimes", "Downloads", "Method"]
 )
 
 with tab_overview:
-    st.subheader("Performance")
+    st.subheader("Performance overview")
     st.pyplot(equity_fig(eq), clear_figure=True)
 
     stats_all = regime_stats("ALL", out.net, out.bench)
     c1, c2, c3, c4, c5, c6 = st.columns(6)
-
     c1.metric("CAGR", fmt_pct(cagr(net_equity), 2))
-    c2.metric("Max DD", fmt_pct(max_drawdown(net_equity), 2))
-    c3.metric("Return", fmt_pct(stats_all["ann_return"], 2))
-    c4.metric("Vol", fmt_pct(stats_all["ann_vol"], 2))
+    c2.metric("Max drawdown", fmt_pct(max_drawdown(net_equity), 2))
+    c3.metric("Annual return", fmt_pct(stats_all["ann_return"], 2))
+    c4.metric("Annual volatility", fmt_pct(stats_all["ann_vol"], 2))
     c5.metric("Sharpe", fmt_num(stats_all["sharpe"], 2))
-    c6.metric("Info vs SPY", fmt_num(stats_all["info_ratio_vs_spy"], 2))
+    c6.metric("Info ratio vs SPY", fmt_num(stats_all["info_ratio_vs_spy"], 2))
 
-    st.caption("Net = after turnover-based transaction costs. Gross curve is still shown in downloads.")
+    with st.expander("Metric definitions"):
+        st.markdown(
+            """
+- **CAGR:** average annual growth rate of the equity curve  
+- **Max drawdown:** worst peak-to-trough decline  
+- **Sharpe:** return per unit of volatility (risk-free rate assumed 0)  
+- **Info ratio:** consistency of outperforming SPY
+            """.strip()
+        )
 
-with tab_risk:
-    st.subheader("Risk lens")
-    dd = drawdowns_series(net_equity)
+    st.subheader("Drawdowns (net)")
+    dd = drawdown_series(net_equity)
     fig = plt.figure(figsize=(10, 3.8))
     plt.plot(dd.index, dd.values, linewidth=2)
-    plt.title("Drawdown (net portfolio)")
+    plt.title("Drawdown")
     plt.xlabel("Date")
     plt.ylabel("Drawdown")
     plt.grid(True, alpha=0.25)
     plt.tight_layout()
     st.pyplot(fig, clear_figure=True)
 
-    rv = rolling_vol(out.net, window=63)
-    rs = rolling_sharpe(out.net, window=63)
-    colA, colB = st.columns(2)
-
-    with colA:
-        fig2 = plt.figure(figsize=(10, 3.8))
-        plt.plot(rv.index, rv.values, linewidth=2)
-        plt.title("Rolling volatility (63d)")
-        plt.xlabel("Date")
-        plt.ylabel("Vol")
-        plt.grid(True, alpha=0.25)
-        plt.tight_layout()
-        st.pyplot(fig2, clear_figure=True)
-
-    with colB:
-        fig3 = plt.figure(figsize=(10, 3.8))
-        plt.plot(rs.index, rs.values, linewidth=2)
-        plt.title("Rolling Sharpe (63d)")
-        plt.xlabel("Date")
-        plt.ylabel("Sharpe")
-        plt.grid(True, alpha=0.25)
-        plt.tight_layout()
-        st.pyplot(fig3, clear_figure=True)
-
-    st.caption("Rolling metrics help non-quants see how behavior changes over time.")
-
 with tab_holdings:
-    st.subheader("Top holdings by rebalance date")
+    st.subheader("Holdings explorer")
+    st.caption("Select a rebalance date to see which stocks ranked highest and why.")
 
     momentum_all, vol_all = compute_price_factors(prices, mom_lb=DEFAULT_MOM_LB, vol_lb=DEFAULT_VOL_LB)
     valid_dates = [d for d in out.rebal_dates if d in prices.index]
@@ -792,38 +800,28 @@ with tab_holdings:
 
         st.dataframe(scores_full.head(int(top_n))[cols], use_container_width=True, height=560)
 
-        # Simple “what changed” summary for that rebalance date
-        hc = out.holdings_changes
-        row = hc[hc["rebalance_date"] == pd.Timestamp(chosen).date().isoformat()]
-        if not row.empty:
-            r0 = row.iloc[0]
-            st.caption(
-                f"Added: {int(r0['num_added'])} | Removed: {int(r0['num_removed'])} | Turnover: "
-                + (fmt_num(float(r0['turnover_fraction']), 3) if r0["turnover_fraction"] is not None else "—")
+        with st.expander("How to read this table"):
+            st.markdown(
+                """
+- **score** is the final ranking value (higher is better in this model)  
+- **value_pe / risk_vol / risk_de:** lower is better (converted into higher z-scores via a negative sign)  
+- **z_*** columns are standardized values so different metrics can be combined  
+- **mom_12m** is used only as a tie-breaker
+                """.strip()
             )
 
         with st.expander("Holdings change log"):
             st.dataframe(out.holdings_changes, use_container_width=True, height=360)
 
-        with st.expander("Plain-English guide to the table"):
-            st.markdown(
-                """
-- **score** is the final rank used to pick the portfolio  
-- Columns like **value_pe** are raw inputs (after winsorization)  
-- Columns like **z_value_pe** are standardized (z-scores) so factors are comparable  
-- For **P/E, volatility, and debt**, lower is better (so we multiply by -1 before scoring)  
-- **Momentum** is used as a tie-breaker
-                """.strip()
-            )
-
 with tab_regimes:
-    st.subheader("VIX regime sensitivity (Net vs SPY)")
+    st.subheader("VIX regime sensitivity")
+    st.caption("Performance split by market volatility conditions using VIX.")
 
-    with st.spinner("Downloading VIX and aligning regimes..."):
+    with st.spinner("Downloading VIX and computing regimes..."):
         vix_close = download_close(vix_ticker, start, end)
         regimes_raw = compute_vix_regimes(vix_close, int(vix_smooth), float(low_q), float(high_q))
 
-        # Align regimes to return dates and forward fill (fixes missing labels)
+        # Align regimes to return dates and forward-fill to reduce missing labels
         regimes = regimes_raw.reindex(out.net.index).ffill()
 
         df = pd.DataFrame({"net": out.net, "bench": out.bench, "regime": regimes}).dropna()
@@ -831,20 +829,13 @@ with tab_regimes:
         high = df[df["regime"] == "high_vol"]
 
         regime_summary = pd.DataFrame([
-            safe_regime_row("ALL", df["net"], df["bench"], min_days=30),
-            safe_regime_row("LOW_VIX", low["net"], low["bench"], min_days=30),
-            safe_regime_row("HIGH_VIX", high["net"], high["bench"], min_days=30),
+            safe_regime_row("All days", df["net"], df["bench"], min_days=30),
+            safe_regime_row("Low VIX", low["net"], low["bench"], min_days=30),
+            safe_regime_row("High VIX", high["net"], high["bench"], min_days=30),
         ])
 
-    display = regime_summary.copy()
-    display["regime"] = display["regime"].replace({
-        "ALL": "All days",
-        "LOW_VIX": "Low VIX (calm)",
-        "HIGH_VIX": "High VIX (turbulent)",
-    })
-
     st.dataframe(
-        display.style.format({
+        regime_summary.style.format({
             "ann_return": "{:.2%}",
             "ann_vol": "{:.2%}",
             "sharpe": "{:.2f}",
@@ -853,73 +844,82 @@ with tab_regimes:
         use_container_width=True
     )
 
-    # Coverage bar chart (layman clarity)
     regime_counts = df["regime"].value_counts().reindex(["low_vol", "mid", "high_vol"]).fillna(0).astype(int)
     regime_counts.index = ["Low VIX", "Mid", "High VIX"]
-    st.bar_chart(safe_bar_series(regime_counts))
+    st.bar_chart(regime_counts)
 
-    if (regime_summary["days"] < 30).any():
-        st.caption("If you see —, widen the date range to get ~30+ days inside that regime.")
-
-    with st.expander("What should a layman take away?"):
+    with st.expander("What does this mean?"):
         st.markdown(
             """
-This shows whether the strategy behaves differently when markets are:
-- **Calm** (Low VIX)
-- **Turbulent** (High VIX)
+The VIX is often used as a market volatility indicator.
 
-A good admissions-ready takeaway is **how risk/return changes across regimes**, not just overall performance.
+This dashboard:
+- Smooths VIX with a rolling average  
+- Labels time as low / mid / high volatility using quantiles  
+- Computes the same metrics inside those volatility environments
+
+It helps answer: **does the strategy behave differently when markets are calm vs volatile?**
             """.strip()
         )
 
 with tab_downloads:
-    # Export-friendly regimes (clean names)
-    export_reg = display.copy()
+    st.subheader("Downloads")
 
-    make_download_buttons(eq, out.holdings_changes, export_reg)
+    st.download_button(
+        "Equity curves (CSV)",
+        data=eq.to_csv(index=True).encode("utf-8"),
+        file_name="equity_curves.csv",
+        mime="text/csv",
+    )
 
-    with st.expander("One-paragraph summary (copy/paste for applications)"):
-        st.markdown(
-            f"""
-I built **Atlas**, an interactive Streamlit research dashboard that constructs a monthly rebalanced,
-equal-weighted equity portfolio from a fixed large-cap universe using a weighted factor score
-(valuation, profitability, growth, and risk; momentum as a tie-breaker). The app compares results to SPY,
-models turnover-based transaction costs, and analyzes performance across market volatility regimes defined
-by a smoothed VIX series. Users can explore “top holdings at each rebalance” with the underlying factor table,
-download results, and see how strategy behavior changes in calm vs turbulent markets.
-            """.strip()
+    reg_csv = regime_summary.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        "Regime summary (CSV)",
+        data=reg_csv,
+        file_name="regime_summary.csv",
+        mime="text/csv",
+    )
+
+    try:
+        from io import BytesIO
+        bio = BytesIO()
+        with pd.ExcelWriter(bio, engine="openpyxl") as writer:
+            out.holdings_changes.to_excel(writer, index=False, sheet_name="holdings_changes")
+        st.download_button(
+            "Holdings log (Excel)",
+            data=bio.getvalue(),
+            file_name="holdings_changes.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
+    except Exception:
+        st.caption("Excel export needs openpyxl.")
 
 with tab_method:
-    st.subheader("Method (short and transparent)")
+    st.subheader("Method")
     st.markdown(
         """
-**Portfolio**
+**Portfolio construction**
 - Fixed universe of tickers (editable)
 - Rebalances on a schedule (monthly by default)
-- Picks **TOP N** by factor score and equally weights them
+- Selects the **top-ranked N** stocks and equal-weights them
 
-**Factors**
+**Signals**
 - Value: trailing P/E (lower is better)
 - Profitability: ROE (higher is better)
 - Growth: revenue growth (higher is better)
-- Risk: realized volatility + debt-to-equity (lower is better)
+- Risk: realized volatility and debt-to-equity (lower is better)
 - Momentum: used as a tie-breaker
 
 **Processing**
-- Winsorize inputs (reduce outliers)
-- Convert to z-scores cross-sectionally
-- Weighted score = sum(weight × z-score)
+- Winsorization reduces the impact of extreme outliers
+- Cross-sectional z-scores standardize each signal
+- The final score is a weighted sum of z-scores
 
-**Transaction costs**
-- Cost applied as: (bps per 100% turnover) × turnover at rebalance
+**Costs**
+- A simple turnover-based cost is applied on each rebalance date
 
-**VIX regimes**
-- Smooth VIX with a rolling mean
-- Label Low/Mid/High using quantiles
-- Compute metrics inside Low vs High regimes
-
-**Limitation**
-- Fundamentals come from a current snapshot (yfinance), not point-in-time historical fundamentals.
+**Notes**
+- Fundamentals are a current snapshot from yfinance (not point-in-time historical fundamentals)
+- This is a research prototype for education and exploration, not financial advice
         """.strip()
     )
