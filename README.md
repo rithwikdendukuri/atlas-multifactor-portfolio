@@ -1,122 +1,118 @@
-# Atlas Multi-factor ETF Portfolio
+# Atlas Multi-Factor Equity Portfolio
 
-This repository contains a rules-based equity portfolio prototype that applies a multi-factor ranking framework to a fixed universe of large-cap U.S. stocks. The strategy combines price-based and fundamental signals, rebalances monthly, and evaluates performance relative to the S&P 500 using both gross and net-of-cost returns.
+Atlas is a rules-based, multi-factor equity portfolio implemented in Python and deployed as an interactive Streamlit web application.
 
-The project is designed as a methodological prototype, emphasizing transparency, discipline, and awareness of empirical finance limitations rather than performance optimization.
+The project is designed as a **methodological prototype** to study factor-based portfolio construction, turnover effects, and performance behavior across different market volatility regimes.
 
 ---
 
 ## Overview
 
-- Universe: 50 large-cap U.S. equities  
-- Portfolio size: Top 30 ranked stocks  
-- Rebalance frequency: Monthly  .
-- Weighting: Equal-weighted with drift between rebalances  
-- Benchmark: SPDR S&P 500 ETF (SPY)  
-- Backtest period: January 2016 – present  
-
-The model ranks securities using a combination of momentum, valuation, profitability, growth, and risk factors. Portfolio construction and evaluation follow explicit, rule-based procedures.
-
----
-
-## Factor Framework
-
-At each rebalance date, stocks are ranked cross-sectionally using the following factors:
-
-Price-based factors:
-- Momentum: Trailing 12-month total return (252 trading days). No skip-month adjustment is applied in this prototype.
-- Volatility: Annualized standard deviation of daily returns over the prior 252 trading days  
-
-Fundamental factors:
-- Value: Trailing price-to-earnings (P/E) ratio (lower preferred)  
-- Profitability: Return on equity (ROE) (higher preferred)  
-- Growth: Revenue growth (higher preferred)  
-- Leverage risk: Debt-to-equity ratio (lower preferred)  
-
-Fundamental data are retrieved from Yahoo Finance and treated as static over the sample period. As a result, fundamental signals are not point-in-time and may introduce look-ahead bias. Accordingly, results involving fundamentals should be interpreted as illustrative rather than fully implementable.
+- Fixed universe of large-cap U.S. equities
+- Equal-weighted TOP-N portfolio selected via cross-sectional factor ranking
+- Configurable rebalance frequency (monthly by default)
+- Explicit transaction cost modeling
+- Benchmark comparison against SPY
+- Volatility regime analysis using the VIX
+- Interactive web interface for exploration and analysis
 
 ---
 
-## Data Processing
+## Factor Model
 
-- All factor values are winsorized at the 1st and 99th percentiles at each rebalance date  
-- Factors are standardized using cross-sectional z-scores  
-- For factors where lower values are preferred (P/E, volatility, debt-to-equity), z-scores are sign-inverted  
-- Missing factor values receive zero contribution after standardization to avoid mechanical advantage  
+At each rebalance date, stocks are ranked using a weighted combination of the following factors:
 
-A composite score is computed as an equal-weighted sum of standardized factor scores.
+- **Valuation**: Trailing P/E (lower is better)
+- **Profitability**: Return on Equity (ROE)
+- **Growth**: Revenue growth
+- **Risk**:
+  - Realized volatility
+  - Debt-to-equity ratio
+- **Momentum**: 12-month price momentum (used as a tie-breaker)
+
+Raw factor values are winsorized and transformed into cross-sectional z-scores prior to aggregation.
 
 ---
 
 ## Portfolio Construction
 
-- Securities are ranked by composite score, with momentum used as a secondary tie-breaker  
-- The top 30 securities are selected at each rebalance  
-- The portfolio is implicitly equal-weighted and allowed to drift between rebalances  
+- TOP-N securities selected by composite factor score
+- Equal weighting across holdings
+- Rebalanced on a fixed schedule (monthly by default)
+- Turnover measured at each rebalance
+- Transaction costs applied as a function of portfolio turnover
 
 ---
 
-## Turnover and Transaction Costs
+## Performance Evaluation
 
-Turnover at each rebalance is defined as:
+The application computes and visualizes:
 
-Turnover = 1 − |Holdings_t ∩ Holdings_(t−1)| / N
-
-Transaction costs are modeled as a linear function of turnover:
-- 10 basis points per 100 percent turnover
-- Costs are deducted on the first trading day following each rebalance
-
-Both gross (no costs) and net (after costs) portfolio returns are reported.
+- Cumulative equity curves (gross and net of transaction costs)
+- Annualized return and volatility
+- Sharpe ratio
+- Information ratio versus SPY
+- Average portfolio turnover
 
 ---
 
-## Performance Metrics
+## Volatility Regime Analysis
 
-The strategy is evaluated using:
-- Annualized return  
-- Annualized volatility  
-- Sharpe ratio  
-- Information ratio (relative to SPY)  
-- Maximum drawdown  
-- CAPM alpha and beta (estimated from daily returns)  
-- Average monthly turnover  
+Portfolio performance is additionally evaluated across market volatility regimes defined using the VIX.
 
-Equity curves for gross returns, net-of-cost returns, and the benchmark are plotted automatically when the script is run.
+- VIX levels are smoothed using a rolling moving average
+- Days are classified into **low**, **mid**, and **high** volatility regimes based on distribution quantiles
+- Risk-adjusted performance metrics are computed separately for:
+  - All periods
+  - Low-volatility regimes
+  - High-volatility regimes
 
----
-
-## Outputs
-
-Running the script generates:
-- prices.csv — historical adjusted prices for all securities  
-- fundamentals.csv — snapshot fundamentals pulled from Yahoo Finance  
-- equity_curves.csv — cumulative returns for gross portfolio, net portfolio, and benchmark  
-- holdings_log.csv — holdings at each rebalance date  
-- turnover_log.csv — turnover at each rebalance date  
+This analysis highlights how portfolio behavior and risk characteristics change across different market environments.
 
 ---
 
-## Installation
+## Interactive Web Application
 
-pip install yfinance pandas numpy matplotlib
+The Streamlit dashboard allows users to:
 
----
-
-## Run
-
-python atlas-multifactor-etf.py
-
-When executed, the script will:
-1. Download historical adjusted price data for all securities in the universe
-2. Retrieve snapshot fundamental data from Yahoo Finance
-3. Construct a monthly rebalanced, rules-based multi-factor portfolio
-4. Compute both gross and net-of-transaction-cost returns
-5. Calculate performance statistics including Sharpe ratio, information ratio, alpha/beta, drawdown, and turnover
-6. Save all output files to disk
-7. Automatically open a comparative equity curve plot showing portfolio and benchmark performance
+- Adjust factor weights (with optional auto-normalization)
+- Modify rebalance frequency, lookback windows, and transaction costs
+- View portfolio performance relative to SPY
+- Explore **top holdings at each rebalance date**, including:
+  - Raw factor inputs
+  - Z-scores
+  - Composite ranking scores
+- Inspect turnover and holdings changes over time
+- Analyze performance conditioned on volatility regimes
 
 ---
 
-## Notes and Limitations
+## Implementation Notes
 
-- This project is based on historical backtesting and does not represent liv
+- Core portfolio logic and analytics are implemented in Python using pandas and numpy
+- Market data and fundamentals are sourced via `yfinance`
+- The application interface is built using Streamlit
+- Research logic and UI functionality are intentionally combined for clarity and reproducibility
+
+---
+
+## Limitations
+
+- Fundamental data sourced via `yfinance` reflects current snapshots rather than point-in-time historical fundamentals
+- As a result, this project should be interpreted as a **research and learning tool**, not a production-grade backtest
+- The strategy is not intended for live trading or investment use
+
+---
+
+## Files
+
+- `atlas_app.py` — interactive Streamlit web application
+- `requirements.txt` — Python dependencies
+
+---
+
+## Live Demo
+
+A live version of the application is deployed via Streamlit Community Cloud:
+
+**[Insert Streamlit App URL here]**
