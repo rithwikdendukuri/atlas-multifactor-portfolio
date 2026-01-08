@@ -51,9 +51,17 @@ def apply_mode_theme(advanced: bool) -> None:
         css = """
         <style>
         :root{
-          --bg:#0b1020; --panel:#0f1730; --text:#f3f6ff; --muted:#cfd7ff;
-          --muted2:#aeb9e8; --accent:#7aa2ff; --border:rgba(255,255,255,0.12);
+          --bg:#0b1020;
+          --panel:#0f1730;
+          --text:#f3f6ff;
+          --muted:#cfd7ff;
+          --muted2:#aeb9e8;
+          --accent:#7aa2ff;
+          --border:rgba(255,255,255,0.14);
+          --border2:rgba(255,255,255,0.22);
           --shadow:rgba(0,0,0,0.35);
+          --field:rgba(255,255,255,0.07);
+          --field2:rgba(255,255,255,0.10);
         }
         .stApp{
           background:
@@ -62,16 +70,20 @@ def apply_mode_theme(advanced: bool) -> None:
             var(--bg);
           color:var(--text);
         }
-        html, body, [class*="css"]{ color:var(--text) !important; -webkit-font-smoothing: antialiased; }
+        html, body, [class*="css"]{
+          color:var(--text) !important;
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+        }
         .stMarkdown p, .stMarkdown li, .stMarkdown span { color: var(--text) !important; }
-        .stCaption, .stMarkdown small { color: var(--muted) !important; }
+        .stCaption, .stMarkdown small { color: rgba(207,215,255,0.82) !important; }
 
         [data-testid="stSidebar"]{
           background: linear-gradient(180deg, rgba(15,23,48,0.98), rgba(8,12,26,0.98));
           border-right:1px solid var(--border);
         }
         [data-testid="stSidebar"] *{ color:var(--text) !important; }
-        [data-testid="stSidebar"] .stCaption{ color:var(--muted2) !important; }
+        [data-testid="stSidebar"] .stCaption{ color:rgba(174,185,232,0.85) !important; }
 
         label, .stTextInput label, .stSelectbox label, .stNumberInput label, .stSlider label {
           color: var(--text) !important;
@@ -81,7 +93,7 @@ def apply_mode_theme(advanced: bool) -> None:
         .stButton>button{
           background: linear-gradient(180deg, rgba(122,162,255,1.0), rgba(88,129,255,1.0));
           color:#0b1020 !important;
-          border:1px solid rgba(255,255,255,0.12);
+          border:1px solid rgba(255,255,255,0.16);
           border-radius:14px;
           box-shadow:0 10px 25px var(--shadow);
           font-weight:800;
@@ -96,7 +108,7 @@ def apply_mode_theme(advanced: bool) -> None:
           box-shadow:0 10px 25px var(--shadow);
         }
         [data-testid="stMetric"] *{ color: var(--text) !important; }
-        [data-testid="stMetricLabel"]{ color: var(--muted) !important; }
+        [data-testid="stMetricLabel"]{ color: rgba(207,215,255,0.82) !important; }
 
         [data-testid="stDataFrame"]{
           background: rgba(255,255,255,0.04);
@@ -113,46 +125,53 @@ def apply_mode_theme(advanced: bool) -> None:
           padding:8px 12px;
         }
 
-        button[role="tab"]{ color: var(--muted) !important; }
+        button[role="tab"]{ color: rgba(207,215,255,0.75) !important; }
         button[role="tab"][aria-selected="true"]{
           color: var(--text) !important;
           border-bottom:2px solid var(--accent) !important;
         }
-        /* ---- Advanced mode: make inputs readable ---- */
-[data-testid="stTextInput"] input,
-[data-testid="stTextArea"] textarea,
-[data-testid="stNumberInput"] input,
-[data-testid="stSelectbox"] div[role="combobox"],
-[data-testid="stMultiSelect"] div[role="combobox"]{
-  background: rgba(255,255,255,0.06) !important;
-  color: var(--text) !important;
-  border: 1px solid rgba(255,255,255,0.22) !important;
-  border-radius: 12px !important;
-}
 
-/* placeholder text */
-[data-testid="stTextInput"] input::placeholder,
-[data-testid="stTextArea"] textarea::placeholder{
-  color: rgba(243,246,255,0.55) !important;
-}
+        /* Inputs / selects / number fields (readable in advanced mode) */
+        [data-testid="stTextInput"] input,
+        [data-testid="stTextArea"] textarea,
+        [data-testid="stNumberInput"] input,
+        [data-testid="stSelectbox"] div[role="combobox"],
+        [data-testid="stMultiSelect"] div[role="combobox"]{
+          background: var(--field) !important;
+          color: var(--text) !important;
+          border: 1px solid var(--border2) !important;
+          border-radius: 12px !important;
+        }
+        [data-testid="stSelectbox"] div[role="combobox"] *{
+          color: var(--text) !important;
+        }
+        [data-testid="stTextInput"] input::placeholder,
+        [data-testid="stTextArea"] textarea::placeholder{
+          color: rgba(243,246,255,0.58) !important;
+        }
 
-/* dropdown menu panel */
-div[role="listbox"]{
-  background: #0f1730 !important;
-  border: 1px solid rgba(255,255,255,0.18) !important;
-}
-div[role="option"]{
-  color: var(--text) !important;
-}
-div[role="option"]:hover{
-  background: rgba(122,162,255,0.18) !important;
-}
+        /* Dropdown menu panel */
+        div[role="listbox"]{
+          background: rgba(15,23,48,0.98) !important;
+          border: 1px solid rgba(255,255,255,0.18) !important;
+          border-radius: 12px !important;
+        }
+        div[role="option"]{ color: var(--text) !important; }
+        div[role="option"]:hover{ background: rgba(122,162,255,0.18) !important; }
 
-/* slider / checkbox/toggle labels already white, but dim the help text */
-small, .stCaption{
-  color: rgba(207,215,255,0.75) !important;
-}
-
+        /* Download buttons (visible in advanced mode) */
+        [data-testid="stDownloadButton"] > button{
+          background: rgba(255,255,255,0.10) !important;
+          color: var(--text) !important;
+          border: 1px solid rgba(255,255,255,0.22) !important;
+          border-radius: 14px !important;
+          font-weight: 800 !important;
+          box-shadow: 0 10px 22px var(--shadow) !important;
+        }
+        [data-testid="stDownloadButton"] > button:hover{
+          background: rgba(255,255,255,0.14) !important;
+          transform: translateY(-1px);
+        }
         </style>
         """
     else:
@@ -187,16 +206,18 @@ small, .stCaption{
           box-shadow:0 10px 20px var(--shadow);
         }
         details{ background:#ffffff; border:1px solid var(--border); border-radius:14px; padding:8px 12px; }
+
+        /* Download buttons (visible in light mode too) */
+        [data-testid="stDownloadButton"] > button{
+          background: var(--accent) !important;
+          color:#ffffff !important;
+          border:1px solid var(--border) !important;
+          border-radius:12px !important;
+          font-weight:800 !important;
+        }
         </style>
         """
     st.markdown(css, unsafe_allow_html=True)
-
-
-def safe_float(x) -> float:
-    try:
-        return float(str(x).replace(",", ""))
-    except Exception:
-        return np.nan
 
 
 def zscore(s: pd.Series) -> pd.Series:
@@ -217,6 +238,13 @@ def normalize_weights(w: Dict[str, float]) -> Dict[str, float]:
         k = len(w)
         return {kk: 1.0 / k for kk in w}
     return {kk: float(v) / s for kk, v in w.items()}
+
+
+def safe_float(x) -> float:
+    try:
+        return float(str(x).replace(",", ""))
+    except Exception:
+        return np.nan
 
 
 def fmt_pct(x: float, decimals: int = 2) -> str:
@@ -601,10 +629,31 @@ with st.sidebar:
 
 
 st.title("Atlas")
-st.caption("Rules-based portfolio scoring + backtest. For learning and research (not advice).")
+st.caption("A rules-based stock ranking model with a backtest and a volatility-regime view.")
+
+with st.container():
+    st.subheader("What you’re looking at")
+    st.markdown(
+        """
+Atlas is a simple way to explore how a rules-based stock portfolio would have behaved in the past.
+
+**How it works**
+- Start with a fixed list of large, liquid U.S. stocks
+- Score each stock using a few signals (value, profitability, growth, and risk)
+- Pick the top-ranked names and equal-weight them
+- Rebalance on a schedule (monthly by default)
+- Compare results to a benchmark you choose (not just SPY)
+
+**What to use this for**
+- Learn how systematic portfolios are built
+- See how performance changes in calm vs volatile markets (using the VIX)
+
+This tool uses historical market data. It’s for research and education, not investing advice.
+        """.strip()
+    )
 
 if not run:
-    st.info("Set options in the sidebar, then click **Run**.")
+    st.info("Choose settings in the sidebar, then click **Run**.")
     st.stop()
 
 if len(tickers) < 5:
@@ -634,7 +683,7 @@ with st.spinner(f"Benchmark ({benchmark})"):
     bench_px = bench_df[benchmark] if benchmark in bench_df.columns else None
 
 if bench_px is None or bench_px.dropna().empty:
-    st.error("Benchmark not found. Try a liquid ETF (e.g., SPY, QQQ, IWM) or a valid ticker.")
+    st.error("Benchmark not found. Try a liquid ETF (SPY, QQQ, IWM) or a valid ticker.")
     st.stop()
 
 with st.spinner("Fundamentals"):
@@ -642,7 +691,7 @@ with st.spinner("Fundamentals"):
 
 fund_missing_rate = float(fundamentals.isna().mean().mean())
 if fund_missing_rate > 0.6:
-    st.warning("A lot of fundamentals are missing from the data source. Treat results as directional.")
+    st.warning("Many fundamentals are missing from the data source. Treat results as directional.")
 
 with st.spinner("Backtest"):
     out = backtest(
@@ -737,7 +786,7 @@ with tab_holdings:
 
 with tab_regimes:
     st.subheader("VIX regimes")
-    st.caption("Same metrics, split by volatility regimes from VIX.")
+    st.caption("Same metrics, split by volatility conditions from VIX.")
 
     with st.spinner("VIX"):
         vix_close = download_close(vix_ticker, start, end)
