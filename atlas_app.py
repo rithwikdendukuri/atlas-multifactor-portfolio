@@ -642,7 +642,7 @@ Atlas is a simple way to explore how a rules-based stock portfolio would have be
 - Score each stock using a few signals (value, profitability, growth, and risk)
 - Pick the top-ranked names and equal-weight them
 - Rebalance on a schedule (monthly by default)
-- Compare results to a benchmark you choose (not just SPY)
+- Compare results to a benchmark you choose
 
 **What to use this for**
 - Learn how systematic portfolios are built
