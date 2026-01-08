@@ -58,11 +58,12 @@ def apply_mode_theme(advanced: bool) -> None:
           --muted2:#aeb9e8;
           --accent:#7aa2ff;
           --border:rgba(255,255,255,0.14);
-          --border2:rgba(255,255,255,0.22);
+          --border2:rgba(255,255,255,0.24);
           --shadow:rgba(0,0,0,0.35);
-          --field:rgba(255,255,255,0.07);
-          --field2:rgba(255,255,255,0.10);
+          --field:rgba(255,255,255,0.08);
+          --field2:rgba(255,255,255,0.11);
         }
+
         .stApp{
           background:
             radial-gradient(1200px 600px at 15% 10%, rgba(122,162,255,0.26), transparent 60%),
@@ -70,13 +71,22 @@ def apply_mode_theme(advanced: bool) -> None:
             var(--bg);
           color:var(--text);
         }
+
         html, body, [class*="css"]{
           color:var(--text) !important;
           -webkit-font-smoothing: antialiased;
           -moz-osx-font-smoothing: grayscale;
         }
-        .stMarkdown p, .stMarkdown li, .stMarkdown span { color: var(--text) !important; }
-        .stCaption, .stMarkdown small { color: rgba(207,215,255,0.82) !important; }
+
+        /* Make ALL plain text follow the dark theme */
+        .stMarkdown, .stMarkdown p, .stMarkdown li, .stMarkdown span,
+        .stText, .stCaption, .stAlert, .stInfo, .stWarning, .stError, .stSuccess,
+        [data-testid="stMetricValue"], [data-testid="stMetricLabel"]{
+          color: var(--text) !important;
+        }
+        .stCaption, .stMarkdown small{
+          color: rgba(207,215,255,0.82) !important;
+        }
 
         [data-testid="stSidebar"]{
           background: linear-gradient(180deg, rgba(15,23,48,0.98), rgba(8,12,26,0.98));
@@ -85,11 +95,13 @@ def apply_mode_theme(advanced: bool) -> None:
         [data-testid="stSidebar"] *{ color:var(--text) !important; }
         [data-testid="stSidebar"] .stCaption{ color:rgba(174,185,232,0.85) !important; }
 
-        label, .stTextInput label, .stSelectbox label, .stNumberInput label, .stSlider label {
+        label, .stTextInput label, .stSelectbox label, .stNumberInput label,
+        .stSlider label, .stRadio label, .stCheckbox label, .stToggle label{
           color: var(--text) !important;
           font-weight: 650;
         }
 
+        /* Primary buttons */
         .stButton>button{
           background: linear-gradient(180deg, rgba(122,162,255,1.0), rgba(88,129,255,1.0));
           color:#0b1020 !important;
@@ -100,6 +112,7 @@ def apply_mode_theme(advanced: bool) -> None:
         }
         .stButton>button:hover{ filter:brightness(1.05); transform:translateY(-1px); }
 
+        /* Metrics / cards */
         [data-testid="stMetric"]{
           background: rgba(255,255,255,0.06);
           border:1px solid var(--border);
@@ -110,6 +123,7 @@ def apply_mode_theme(advanced: bool) -> None:
         [data-testid="stMetric"] *{ color: var(--text) !important; }
         [data-testid="stMetricLabel"]{ color: rgba(207,215,255,0.82) !important; }
 
+        /* Dataframe container */
         [data-testid="stDataFrame"]{
           background: rgba(255,255,255,0.04);
           border:1px solid var(--border);
@@ -125,41 +139,93 @@ def apply_mode_theme(advanced: bool) -> None:
           padding:8px 12px;
         }
 
+        /* Tabs */
         button[role="tab"]{ color: rgba(207,215,255,0.75) !important; }
         button[role="tab"][aria-selected="true"]{
           color: var(--text) !important;
           border-bottom:2px solid var(--accent) !important;
         }
 
-        /* Inputs / selects / number fields (readable in advanced mode) */
+        /* --------------------------
+           INPUTS: stop white-on-white
+           -------------------------- */
+
+        /* Most text inputs */
         [data-testid="stTextInput"] input,
         [data-testid="stTextArea"] textarea,
-        [data-testid="stNumberInput"] input,
-        [data-testid="stSelectbox"] div[role="combobox"],
-        [data-testid="stMultiSelect"] div[role="combobox"]{
+        [data-testid="stNumberInput"] input{
           background: var(--field) !important;
           color: var(--text) !important;
           border: 1px solid var(--border2) !important;
           border-radius: 12px !important;
+          caret-color: var(--text) !important;
         }
-        [data-testid="stSelectbox"] div[role="combobox"] *{
+
+        /* BaseWeb (selectbox, multiselect, date input, etc.) */
+        [data-baseweb="select"] > div,
+        [data-baseweb="input"] > div,
+        [data-baseweb="textarea"] > div,
+        [data-baseweb="popover"]{
+          background: var(--field) !important;
+          border: 1px solid var(--border2) !important;
+          border-radius: 12px !important;
           color: var(--text) !important;
         }
+
+        /* Select / multiselect visible field */
+        [data-testid="stSelectbox"] div[role="combobox"],
+        [data-testid="stMultiSelect"] div[role="combobox"]{
+          background: var(--field) !important;
+          border: 1px solid var(--border2) !important;
+          border-radius: 12px !important;
+          color: var(--text) !important;
+        }
+        [data-testid="stSelectbox"] div[role="combobox"] *,
+        [data-testid="stMultiSelect"] div[role="combobox"] *{
+          color: var(--text) !important;
+          fill: var(--text) !important;
+        }
+
+        /* Placeholder text */
         [data-testid="stTextInput"] input::placeholder,
         [data-testid="stTextArea"] textarea::placeholder{
           color: rgba(243,246,255,0.58) !important;
         }
+        [data-baseweb="input"] input::placeholder{
+          color: rgba(243,246,255,0.58) !important;
+        }
 
-        /* Dropdown menu panel */
+        /* Dropdown menu */
         div[role="listbox"]{
           background: rgba(15,23,48,0.98) !important;
           border: 1px solid rgba(255,255,255,0.18) !important;
           border-radius: 12px !important;
         }
-        div[role="option"]{ color: var(--text) !important; }
-        div[role="option"]:hover{ background: rgba(122,162,255,0.18) !important; }
+        div[role="option"]{
+          color: var(--text) !important;
+          background: transparent !important;
+        }
+        div[role="option"]:hover{
+          background: rgba(122,162,255,0.18) !important;
+        }
 
-        /* Download buttons (visible in advanced mode) */
+        /* Multiselect tags */
+        [data-baseweb="tag"]{
+          background: rgba(255,255,255,0.10) !important;
+          border: 1px solid rgba(255,255,255,0.20) !important;
+          color: var(--text) !important;
+        }
+        [data-baseweb="tag"] *{
+          color: var(--text) !important;
+          fill: var(--text) !important;
+        }
+
+        /* Slider (value + ticks) */
+        [data-testid="stSlider"] *{
+          color: var(--text) !important;
+        }
+
+        /* Download buttons (fix white text on white button) */
         [data-testid="stDownloadButton"] > button{
           background: rgba(255,255,255,0.10) !important;
           color: var(--text) !important;
@@ -168,9 +234,30 @@ def apply_mode_theme(advanced: bool) -> None:
           font-weight: 800 !important;
           box-shadow: 0 10px 22px var(--shadow) !important;
         }
+        [data-testid="stDownloadButton"] > button *{
+          color: var(--text) !important;
+          fill: var(--text) !important;
+        }
         [data-testid="stDownloadButton"] > button:hover{
           background: rgba(255,255,255,0.14) !important;
           transform: translateY(-1px);
+        }
+
+        /* Some Streamlit versions render "secondary" buttons in white */
+        button[kind="secondary"], button[kind="secondary"] *{
+          color: var(--text) !important;
+          fill: var(--text) !important;
+        }
+        button[kind="secondary"]{
+          background: rgba(255,255,255,0.10) !important;
+          border: 1px solid rgba(255,255,255,0.22) !important;
+          border-radius: 14px !important;
+        }
+
+        /* Checkboxes/toggles/radios inner text */
+        [data-testid="stCheckbox"] *, [data-testid="stRadio"] *, [data-testid="stToggle"] *{
+          color: var(--text) !important;
+          fill: var(--text) !important;
         }
         </style>
         """
@@ -206,8 +293,6 @@ def apply_mode_theme(advanced: bool) -> None:
           box-shadow:0 10px 20px var(--shadow);
         }
         details{ background:#ffffff; border:1px solid var(--border); border-radius:14px; padding:8px 12px; }
-
-        /* Download buttons (visible in light mode too) */
         [data-testid="stDownloadButton"] > button{
           background: var(--accent) !important;
           color:#ffffff !important;
@@ -629,26 +714,23 @@ with st.sidebar:
 
 
 st.title("Atlas")
-st.caption("A rules-based stock ranking model with a backtest and a volatility-regime view.")
+st.caption("A rules-based stock ranking model with a backtest and a volatility view.")
 
 with st.container():
-    st.subheader("What you’re looking at")
+    st.subheader("What this is")
     st.markdown(
         """
-Atlas is a simple way to explore how a rules-based stock portfolio would have behaved in the past.
+Atlas lets you test a simple idea: rank stocks with a few measurable signals, hold the top names, and rebalance on a schedule.
 
-**How it works**
-- Start with a fixed list of large, liquid U.S. stocks
-- Score each stock using a few signals (value, profitability, growth, and risk)
-- Pick the top-ranked names and equal-weight them
-- Rebalance on a schedule (monthly by default)
-- Compare results to a benchmark you choose
+**In plain terms**
+- Start with a list of well-known U.S. stocks
+- Score each stock using value, profitability, growth, and risk
+- Hold the highest-ranked stocks, equal-weighted
+- Rebalance over time and compare to any benchmark you choose
 
-**What to use this for**
-- Learn how systematic portfolios are built
-- See how performance changes in calm vs volatile markets (using the VIX)
+Use it to explore how different settings change results, and how performance looks when markets are calm vs volatile (using VIX).
 
-This tool uses historical market data. It’s for research and education, not investing advice.
+This uses historical data and is for learning and research.
         """.strip()
     )
 
@@ -778,7 +860,6 @@ with tab_holdings:
             "value_pe","profit_roe","growth_rev","risk_vol","risk_de","mom_12m",
             "z_value_pe","z_profit_roe","z_growth_rev","z_risk_vol","z_risk_de","z_mom_12m",
         ]
-
         st.dataframe(scores_full.head(int(top_n))[cols], use_container_width=True, height=560)
 
         with st.expander("Change log"):
