@@ -13,29 +13,6 @@ import streamlit as st
 warnings.filterwarnings("ignore")
 plt.rcParams["figure.dpi"] = 140
 
-# =========================
-# Atlas Portfolio Dashboard
-# =========================
-#
-# Motivation
-# ----------
-# Atlas started as a personal project at the intersection of accounting and quantitative finance.
-# Accounting taught me to respect how fundamentals connect to real business performance. Quant finance
-# taught me to express ideas as transparent rules, test them on historical data, and learn from results.
-#
-# I’ve always wanted to build an “ETF-like” strategy: a systematic, rules-based portfolio that explains
-# what it owns, why it owns it, and how it behaves in different market environments. This dashboard is a
-# research prototype that demonstrates that process end-to-end: factor scoring, rebalancing, turnover/costs,
-# and a volatility-regime view using VIX.
-#
-# Important: This is an educational/research tool, not financial advice and not a live trading system.
-# Data is provided by public sources via yfinance and may contain gaps or inaccuracies.
-#
-
-# =========================
-# Defaults (match original methodology)
-# =========================
-
 DEFAULT_TICKERS: List[str] = [
     "AAPL","MSFT","NVDA","AMZN","GOOGL","GOOG","META","BRK-B","LLY","AVGO",
     "JPM","TSLA","V","XOM","UNH","MA","COST","HD","PG","JNJ",
@@ -66,29 +43,16 @@ DEFAULT_VIX_SMOOTH_DAYS = 63
 DEFAULT_LOW_Q = 0.33
 DEFAULT_HIGH_Q = 0.67
 
-APP_VERSION = "Atlas Portfolio Dashboard"
+APP_VERSION = "Atlas"
 
-
-# =========================
-# Theme switching (Beginner vs Advanced)
-# =========================
 
 def apply_mode_theme(advanced: bool) -> None:
-    """
-    Streamlit can't switch its native theme at runtime, but we can restyle the app with CSS.
-    Beginner mode: clean and bright. Advanced mode: darker, higher-contrast analytics style.
-    """
     if advanced:
         css = """
         <style>
         :root{
-          --bg:#0b1020;
-          --panel:#0f1730;
-          --text:#f3f6ff;
-          --muted:#cfd7ff;
-          --muted2:#aeb9e8;
-          --accent:#7aa2ff;
-          --border:rgba(255,255,255,0.12);
+          --bg:#0b1020; --panel:#0f1730; --text:#f3f6ff; --muted:#cfd7ff;
+          --muted2:#aeb9e8; --accent:#7aa2ff; --border:rgba(255,255,255,0.12);
           --shadow:rgba(0,0,0,0.35);
         }
         .stApp{
@@ -98,11 +62,7 @@ def apply_mode_theme(advanced: bool) -> None:
             var(--bg);
           color:var(--text);
         }
-        html, body, [class*="css"]{
-          color:var(--text) !important;
-          -webkit-font-smoothing: antialiased;
-          -moz-osx-font-smoothing: grayscale;
-        }
+        html, body, [class*="css"]{ color:var(--text) !important; -webkit-font-smoothing: antialiased; }
         .stMarkdown p, .stMarkdown li, .stMarkdown span { color: var(--text) !important; }
         .stCaption, .stMarkdown small { color: var(--muted) !important; }
 
@@ -197,15 +157,12 @@ def apply_mode_theme(advanced: bool) -> None:
     st.markdown(css, unsafe_allow_html=True)
 
 
-# =========================
-# Utilities
-# =========================
-
 def safe_float(x) -> float:
     try:
         return float(str(x).replace(",", ""))
     except Exception:
         return np.nan
+
 
 def zscore(s: pd.Series) -> pd.Series:
     sd = s.std(skipna=True)
@@ -213,9 +170,11 @@ def zscore(s: pd.Series) -> pd.Series:
         return s * 0
     return (s - s.mean(skipna=True)) / sd
 
+
 def winsorize(s: pd.Series, lo=0.01, hi=0.99) -> pd.Series:
     ql, qh = s.quantile([lo, hi])
     return s.clip(ql, qh)
+
 
 def normalize_weights(w: Dict[str, float]) -> Dict[str, float]:
     s = float(sum(w.values()))
@@ -224,21 +183,25 @@ def normalize_weights(w: Dict[str, float]) -> Dict[str, float]:
         return {kk: 1.0 / k for kk in w}
     return {kk: float(v) / s for kk, v in w.items()}
 
+
 def fmt_pct(x: float, decimals: int = 2) -> str:
     if x is None or np.isnan(x):
         return "—"
     return f"{x*100:.{decimals}f}%"
+
 
 def fmt_num(x: float, decimals: int = 2) -> str:
     if x is None or np.isnan(x):
         return "—"
     return f"{x:.{decimals}f}"
 
+
 def safe_date_str(x) -> str:
     try:
         return pd.Timestamp(x).date().isoformat()
     except Exception:
         return str(x)
+
 
 def clean_ticker_list(text: str) -> List[str]:
     raw = [t.strip().upper() for t in text.replace("\n", ",").split(",")]
@@ -251,21 +214,20 @@ def clean_ticker_list(text: str) -> List[str]:
     return uniq
 
 
-# =========================
-# Metrics
-# =========================
-
 def annualized_return(r: pd.Series) -> float:
     return (1 + r).prod() ** (252 / len(r)) - 1 if len(r) > 0 else np.nan
 
+
 def annualized_vol(r: pd.Series) -> float:
     return r.std() * np.sqrt(252) if len(r) > 1 else np.nan
+
 
 def sharpe_ratio(r: pd.Series) -> float:
     sd = r.std()
     if len(r) < 2 or sd == 0 or np.isnan(sd):
         return np.nan
     return r.mean() / sd * np.sqrt(252)
+
 
 def info_ratio(p: pd.Series, b: pd.Series) -> float:
     diff = (p - b).dropna()
@@ -274,12 +236,14 @@ def info_ratio(p: pd.Series, b: pd.Series) -> float:
         return np.nan
     return diff.mean() / sd * np.sqrt(252)
 
+
 def max_drawdown(equity: pd.Series) -> float:
     if equity.empty:
         return np.nan
     peak = equity.cummax()
     dd = equity / peak - 1.0
     return float(dd.min())
+
 
 def cagr(equity: pd.Series) -> float:
     if equity.empty or len(equity) < 2:
@@ -291,10 +255,6 @@ def cagr(equity: pd.Series) -> float:
     return float(equity.iloc[-1] ** (1 / years) - 1)
 
 
-# =========================
-# Data access (cached)
-# =========================
-
 @st.cache_data(show_spinner=False)
 def download_prices(tickers: List[str], start: str, end: Optional[str]) -> pd.DataFrame:
     df = yf.download(tickers, start=start, end=end, auto_adjust=True, progress=False)
@@ -304,6 +264,7 @@ def download_prices(tickers: List[str], start: str, end: Optional[str]) -> pd.Da
         px = px.to_frame(name=tickers[0])
     return px
 
+
 @st.cache_data(show_spinner=False)
 def download_close(ticker: str, start: str, end: Optional[str]) -> pd.Series:
     df = yf.download([ticker], start=start, end=end, auto_adjust=True, progress=False)
@@ -312,6 +273,7 @@ def download_close(ticker: str, start: str, end: Optional[str]) -> pd.Series:
     else:
         s = df["Close"] if "Close" in df.columns else df.squeeze()
     return s.dropna()
+
 
 @st.cache_data(show_spinner=False)
 def fetch_fundamentals(tickers: List[str]) -> pd.DataFrame:
@@ -328,15 +290,12 @@ def fetch_fundamentals(tickers: List[str]) -> pd.DataFrame:
     return pd.DataFrame(rows).set_index("ticker")
 
 
-# =========================
-# Factors + scoring (same logic)
-# =========================
-
 def compute_price_factors(prices: pd.DataFrame, mom_lb: int, vol_lb: int):
     rets = prices.pct_change()
     momentum = prices / prices.shift(mom_lb) - 1
     vol = rets.rolling(vol_lb).std() * np.sqrt(252)
     return momentum, vol
+
 
 def make_scores_full(
     momentum_row: pd.Series,
@@ -375,14 +334,11 @@ def make_scores_full(
     return out
 
 
-# =========================
-# Backtest (same logic)
-# =========================
-
 def turnover(prev: Optional[List[str]], curr: List[str]) -> float:
     if prev is None:
         return np.nan
     return 1 - len(set(prev) & set(curr)) / len(curr)
+
 
 def apply_costs(r: pd.Series, turn: float, tc_bps_per_100_turnover: float) -> pd.Series:
     if np.isnan(turn):
@@ -392,6 +348,7 @@ def apply_costs(r: pd.Series, turn: float, tc_bps_per_100_turnover: float) -> pd
     r.iloc[0] -= cost
     return r
 
+
 @dataclass
 class BacktestOutput:
     gross: pd.Series
@@ -400,6 +357,7 @@ class BacktestOutput:
     avg_turn: float
     holdings_changes: pd.DataFrame
     rebal_dates: pd.DatetimeIndex
+
 
 def backtest(
     prices: pd.DataFrame,
@@ -481,19 +439,15 @@ def backtest(
     )
 
 
-# =========================
-# VIX regimes (same definition; better alignment)
-# =========================
-
 def compute_vix_regimes(vix_close: pd.Series, smooth_days: int, low_q: float, high_q: float) -> pd.Series:
     vix_smooth = vix_close.rolling(smooth_days).mean().dropna()
     lo_thr = float(vix_smooth.quantile(low_q))
     hi_thr = float(vix_smooth.quantile(high_q))
-
     regime = pd.Series("mid", index=vix_smooth.index)
     regime[vix_smooth <= lo_thr] = "low_vol"
     regime[vix_smooth >= hi_thr] = "high_vol"
     return regime
+
 
 def regime_stats(name: str, p: pd.Series, b: pd.Series) -> dict:
     p = p.dropna()
@@ -505,32 +459,23 @@ def regime_stats(name: str, p: pd.Series, b: pd.Series) -> dict:
         "ann_return": float(annualized_return(p)),
         "ann_vol": float(annualized_vol(p)),
         "sharpe": float(sharpe_ratio(p)),
-        "info_ratio_vs_spy": float(info_ratio(p, b)),
+        "info_ratio": float(info_ratio(p, b)),
     }
+
 
 def safe_regime_row(label: str, p: pd.Series, b: pd.Series, min_days: int = 30) -> dict:
     if len(p.dropna()) < min_days:
-        return {
-            "regime": label,
-            "days": int(len(p.dropna())),
-            "ann_return": np.nan,
-            "ann_vol": np.nan,
-            "sharpe": np.nan,
-            "info_ratio_vs_spy": np.nan,
-        }
+        return {"regime": label, "days": int(len(p.dropna())), "ann_return": np.nan, "ann_vol": np.nan, "sharpe": np.nan, "info_ratio": np.nan}
     return regime_stats(label, p, b)
 
 
-# =========================
-# Plots / exports
-# =========================
-
-def equity_df(gross: pd.Series, net: pd.Series, bench: pd.Series) -> pd.DataFrame:
+def equity_df(gross: pd.Series, net: pd.Series, bench: pd.Series, bench_name: str) -> pd.DataFrame:
     return pd.DataFrame({
         "Portfolio (Gross)": (1 + gross).cumprod(),
-        "Portfolio (Net of Costs)": (1 + net).cumprod(),
-        "Benchmark (SPY)": (1 + bench).cumprod(),
+        "Portfolio (Net)": (1 + net).cumprod(),
+        f"Benchmark ({bench_name})": (1 + bench).cumprod(),
     })
+
 
 def equity_fig(df: pd.DataFrame) -> plt.Figure:
     fig = plt.figure(figsize=(10, 5))
@@ -544,21 +489,18 @@ def equity_fig(df: pd.DataFrame) -> plt.Figure:
     plt.tight_layout()
     return fig
 
+
 def drawdown_series(equity: pd.Series) -> pd.Series:
     peak = equity.cummax()
     return equity / peak - 1.0
 
 
-# =========================
-# App UI
-# =========================
-
-st.set_page_config(page_title="Atlas Portfolio", layout="wide")
+st.set_page_config(page_title="Atlas", layout="wide")
 
 with st.sidebar:
     st.caption(APP_VERSION)
 
-    beginner = st.toggle("Beginner mode", value=True, help="Beginner keeps controls minimal. Advanced shows full controls.")
+    beginner = st.toggle("Beginner mode", value=True)
     advanced = not beginner
     apply_mode_theme(advanced)
 
@@ -566,23 +508,21 @@ with st.sidebar:
 
     profile = st.selectbox("Profile", ["Balanced", "Conservative", "Aggressive", "Custom"], index=0)
 
-    st.write("")
-    st.markdown("**Date range**")
+    st.markdown("**Dates**")
     start = st.text_input("Start", value="2017-01-01" if beginner else "2016-01-01")
     end_in = st.text_input("End (optional)", value="")
     end = None if end_in.strip() == "" else end_in.strip()
 
-    st.write("")
     st.markdown("**Portfolio**")
     rebalance_label = st.selectbox("Rebalance", ["Monthly", "Quarterly"] if beginner else ["Monthly", "Quarterly", "Weekly"], index=0)
     rebalance = {"Monthly": "M", "Quarterly": "Q", "Weekly": "W"}[rebalance_label]
-
-    top_n = st.slider("Holdings (TOP N)", 10 if beginner else 5, 50, DEFAULT_TOP_N)
+    top_n = st.slider("Holdings", 10 if beginner else 5, 50, DEFAULT_TOP_N)
     tc = st.number_input("Trading costs (bps / 100% turnover)", 0.0, 200.0, float(DEFAULT_TC_BPS_PER_100_TURNOVER), 1.0)
 
-    st.write("")
-    st.markdown("**Benchmark & regimes**")
-    benchmark = st.text_input("Benchmark", value=DEFAULT_BENCHMARK)
+    st.markdown("**Benchmark**")
+    benchmark = st.text_input("Ticker", value=DEFAULT_BENCHMARK)
+
+    st.markdown("**VIX**")
     vix_ticker = st.text_input("VIX ticker", value=DEFAULT_VIX_TICKER)
 
     if beginner:
@@ -590,12 +530,11 @@ with st.sidebar:
         low_q = DEFAULT_LOW_Q
         high_q = DEFAULT_HIGH_Q
     else:
-        vix_smooth = st.number_input("VIX smoothing (days)", 5, 252, int(DEFAULT_VIX_SMOOTH_DAYS), 1)
-        low_q = st.slider("Low regime quantile", 0.05, 0.49, float(DEFAULT_LOW_Q), 0.01)
-        high_q = st.slider("High regime quantile", 0.51, 0.95, float(DEFAULT_HIGH_Q), 0.01)
+        vix_smooth = st.number_input("Smoothing (days)", 5, 252, int(DEFAULT_VIX_SMOOTH_DAYS), 1)
+        low_q = st.slider("Low quantile", 0.05, 0.49, float(DEFAULT_LOW_Q), 0.01)
+        high_q = st.slider("High quantile", 0.51, 0.95, float(DEFAULT_HIGH_Q), 0.01)
 
-    st.write("")
-    st.markdown("**Factor weights**")
+    st.markdown("**Weights**")
     auto_norm = st.toggle("Normalize weights", value=True)
 
     w = dict(DEFAULT_WEIGHTS)
@@ -605,16 +544,15 @@ with st.sidebar:
         w = {"value_pe": 0.15, "profit_roe": 0.30, "growth_rev": 0.30, "risk_vol": 0.15, "risk_de": 0.10}
 
     if profile == "Custom" or advanced:
-        w["value_pe"] = st.slider("Valuation (P/E)", 0.0, 1.0, float(w["value_pe"]), 0.05)
-        w["profit_roe"] = st.slider("Profitability (ROE)", 0.0, 1.0, float(w["profit_roe"]), 0.05)
-        w["growth_rev"] = st.slider("Growth (revenue)", 0.0, 1.0, float(w["growth_rev"]), 0.05)
-        w["risk_vol"] = st.slider("Risk (volatility)", 0.0, 1.0, float(w["risk_vol"]), 0.05)
+        w["value_pe"] = st.slider("Value (P/E)", 0.0, 1.0, float(w["value_pe"]), 0.05)
+        w["profit_roe"] = st.slider("Profit (ROE)", 0.0, 1.0, float(w["profit_roe"]), 0.05)
+        w["growth_rev"] = st.slider("Growth (rev)", 0.0, 1.0, float(w["growth_rev"]), 0.05)
+        w["risk_vol"] = st.slider("Risk (vol)", 0.0, 1.0, float(w["risk_vol"]), 0.05)
         w["risk_de"] = st.slider("Risk (debt)", 0.0, 1.0, float(w["risk_de"]), 0.05)
 
     weights = normalize_weights(w) if auto_norm else w
     st.caption(f"Weight sum: {sum(weights.values()):.2f}")
 
-    st.write("")
     st.markdown("**Universe**")
     edit_universe = st.toggle("Edit tickers", value=False)
     if edit_universe:
@@ -624,83 +562,54 @@ with st.sidebar:
         tickers = DEFAULT_TICKERS
 
     st.divider()
-    run = st.button("Run analysis", type="primary")
+    run = st.button("Run", type="primary")
 
 
-# =========================
-# Page header
-# =========================
-
-st.title("Atlas Portfolio Dashboard")
-st.caption("A transparent, rules-based portfolio built from fundamentals and price behavior, compared to SPY.")
-
-with st.expander("Project background", expanded=False):
-    st.markdown(
-        """
-Atlas is a personal research project inspired by two interests:
-
-- **Accounting fundamentals:** understanding profitability, growth, and balance-sheet strength  
-- **Quantitative finance:** turning an idea into clear rules and testing it with data  
-
-The goal was to create an **ETF-like** framework: a portfolio that is systematic, explainable, and easy to inspect.
-This dashboard shows the full workflow—how stocks are scored, how the portfolio changes over time, and how results
-look in calm versus volatile markets (using VIX).
-
-This is a research prototype for education and exploration, not investment advice.
-        """.strip()
-    )
+st.title("Atlas")
+st.caption("Rules-based portfolio scoring + backtest. For learning and research (not advice).")
 
 if not run:
-    st.info("Choose settings in the sidebar, then click **Run analysis**.")
+    st.info("Set options in the sidebar, then click **Run**.")
     st.stop()
 
-# =========================
-# Validation
-# =========================
-
 if len(tickers) < 5:
-    st.error("Please provide at least 5 tickers.")
+    st.error("Add at least 5 tickers.")
     st.stop()
 
 if top_n > len(tickers):
-    st.error("Holdings (TOP N) cannot exceed the number of tickers.")
+    st.error("Holdings can’t exceed the ticker count.")
     st.stop()
 
-# =========================
-# Run pipeline
-# =========================
+benchmark = benchmark.strip().upper()
+vix_ticker = vix_ticker.strip().upper()
 
-with st.spinner("Downloading price data..."):
+with st.spinner("Prices"):
     prices = download_prices(tickers, start, end)
 
 if prices.empty or prices.shape[0] < 80:
-    st.error("Not enough price data for the selected window. Try a later start date.")
+    st.error("Not enough price data for this window. Try a later start date.")
     st.stop()
 
 missing_px = [t for t in tickers if t not in prices.columns]
 if missing_px:
-    st.warning(
-        "Some tickers had no price data and were dropped: "
-        + ", ".join(missing_px[:10])
-        + (" ..." if len(missing_px) > 10 else "")
-    )
+    st.warning("Dropped (no price data): " + ", ".join(missing_px[:12]) + (" ..." if len(missing_px) > 12 else ""))
 
-with st.spinner("Downloading benchmark data..."):
+with st.spinner(f"Benchmark ({benchmark})"):
     bench_df = download_prices([benchmark], start, end)
     bench_px = bench_df[benchmark] if benchmark in bench_df.columns else None
 
 if bench_px is None or bench_px.dropna().empty:
-    st.error("Benchmark price data not found. Try SPY.")
+    st.error("Benchmark not found. Try a liquid ETF (e.g., SPY, QQQ, IWM) or a valid ticker.")
     st.stop()
 
-with st.spinner("Fetching fundamentals snapshot..."):
+with st.spinner("Fundamentals"):
     fundamentals = fetch_fundamentals(list(prices.columns)).reindex(prices.columns)
 
 fund_missing_rate = float(fundamentals.isna().mean().mean())
 if fund_missing_rate > 0.6:
-    st.warning("Many fundamentals are missing (data source limitation). Results are still shown, but interpret cautiously.")
+    st.warning("A lot of fundamentals are missing from the data source. Treat results as directional.")
 
-with st.spinner("Running backtest..."):
+with st.spinner("Backtest"):
     out = backtest(
         prices=prices,
         fundamentals=fundamentals,
@@ -714,48 +623,36 @@ with st.spinner("Running backtest..."):
     )
 
 if out.gross.empty or out.net.empty:
-    st.error("No returns were produced. Try a later start date or Monthly rebalancing.")
+    st.error("No returns produced. Try Monthly rebalancing or a later start date.")
     st.stop()
 
-eq = equity_df(out.gross, out.net, out.bench)
-net_equity = eq["Portfolio (Net of Costs)"]
+eq = equity_df(out.gross, out.net, out.bench, bench_name=benchmark)
+net_equity = eq["Portfolio (Net)"]
 
-# Status bar
 s1, s2, s3, s4 = st.columns(4)
-s1.metric("Universe size", f"{len(prices.columns)}")
-s2.metric("Date range", f"{safe_date_str(eq.index.min())} → {safe_date_str(eq.index.max())}")
+s1.metric("Universe", f"{len(prices.columns)}")
+s2.metric("Range", f"{safe_date_str(eq.index.min())} → {safe_date_str(eq.index.max())}")
 s3.metric("Rebalance", rebalance_label)
 s4.metric("Profile", profile)
 
-# Tabs
 tab_overview, tab_holdings, tab_regimes, tab_downloads, tab_method = st.tabs(
-    ["Overview", "Holdings", "VIX regimes", "Downloads", "Method"]
+    ["Overview", "Holdings", "VIX", "Downloads", "Method"]
 )
 
 with tab_overview:
-    st.subheader("Performance overview")
+    st.subheader("Overview")
     st.pyplot(equity_fig(eq), clear_figure=True)
 
-    stats_all = regime_stats("ALL", out.net, out.bench)
+    stats_all = regime_stats("All", out.net, out.bench)
     c1, c2, c3, c4, c5, c6 = st.columns(6)
     c1.metric("CAGR", fmt_pct(cagr(net_equity), 2))
     c2.metric("Max drawdown", fmt_pct(max_drawdown(net_equity), 2))
     c3.metric("Annual return", fmt_pct(stats_all["ann_return"], 2))
-    c4.metric("Annual volatility", fmt_pct(stats_all["ann_vol"], 2))
+    c4.metric("Annual vol", fmt_pct(stats_all["ann_vol"], 2))
     c5.metric("Sharpe", fmt_num(stats_all["sharpe"], 2))
-    c6.metric("Info ratio vs SPY", fmt_num(stats_all["info_ratio_vs_spy"], 2))
+    c6.metric(f"Info vs {benchmark}", fmt_num(stats_all["info_ratio"], 2))
 
-    with st.expander("Metric definitions"):
-        st.markdown(
-            """
-- **CAGR:** average annual growth rate of the equity curve  
-- **Max drawdown:** worst peak-to-trough decline  
-- **Sharpe:** return per unit of volatility (risk-free rate assumed 0)  
-- **Info ratio:** consistency of outperforming SPY
-            """.strip()
-        )
-
-    st.subheader("Drawdowns (net)")
+    st.subheader("Drawdown (net)")
     dd = drawdown_series(net_equity)
     fig = plt.figure(figsize=(10, 3.8))
     plt.plot(dd.index, dd.values, linewidth=2)
@@ -767,8 +664,8 @@ with tab_overview:
     st.pyplot(fig, clear_figure=True)
 
 with tab_holdings:
-    st.subheader("Holdings explorer")
-    st.caption("Select a rebalance date to see which stocks ranked highest and why.")
+    st.subheader("Holdings")
+    st.caption("Pick a rebalance date to see ranks and inputs.")
 
     momentum_all, vol_all = compute_price_factors(prices, mom_lb=DEFAULT_MOM_LB, vol_lb=DEFAULT_VOL_LB)
     valid_dates = [d for d in out.rebal_dates if d in prices.index]
@@ -776,7 +673,7 @@ with tab_holdings:
         valid_dates = valid_dates[-160:]
 
     if not valid_dates:
-        st.warning("Not enough rebalance dates to show holdings.")
+        st.warning("Not enough rebalance dates to display holdings.")
     else:
         chosen = st.select_slider(
             "Rebalance date",
@@ -800,28 +697,16 @@ with tab_holdings:
 
         st.dataframe(scores_full.head(int(top_n))[cols], use_container_width=True, height=560)
 
-        with st.expander("How to read this table"):
-            st.markdown(
-                """
-- **score** is the final ranking value (higher is better in this model)  
-- **value_pe / risk_vol / risk_de:** lower is better (converted into higher z-scores via a negative sign)  
-- **z_*** columns are standardized values so different metrics can be combined  
-- **mom_12m** is used only as a tie-breaker
-                """.strip()
-            )
-
-        with st.expander("Holdings change log"):
+        with st.expander("Change log"):
             st.dataframe(out.holdings_changes, use_container_width=True, height=360)
 
 with tab_regimes:
-    st.subheader("VIX regime sensitivity")
-    st.caption("Performance split by market volatility conditions using VIX.")
+    st.subheader("VIX regimes")
+    st.caption("Same metrics, split by volatility regimes from VIX.")
 
-    with st.spinner("Downloading VIX and computing regimes..."):
+    with st.spinner("VIX"):
         vix_close = download_close(vix_ticker, start, end)
         regimes_raw = compute_vix_regimes(vix_close, int(vix_smooth), float(low_q), float(high_q))
-
-        # Align regimes to return dates and forward-fill to reduce missing labels
         regimes = regimes_raw.reindex(out.net.index).ffill()
 
         df = pd.DataFrame({"net": out.net, "bench": out.bench, "regime": regimes}).dropna()
@@ -835,32 +720,16 @@ with tab_regimes:
         ])
 
     st.dataframe(
-        regime_summary.style.format({
-            "ann_return": "{:.2%}",
-            "ann_vol": "{:.2%}",
-            "sharpe": "{:.2f}",
-            "info_ratio_vs_spy": "{:.2f}",
-        }, na_rep="—"),
-        use_container_width=True
+        regime_summary.style.format(
+            {"ann_return": "{:.2%}", "ann_vol": "{:.2%}", "sharpe": "{:.2f}", "info_ratio": "{:.2f}"},
+            na_rep="—",
+        ),
+        use_container_width=True,
     )
 
     regime_counts = df["regime"].value_counts().reindex(["low_vol", "mid", "high_vol"]).fillna(0).astype(int)
-    regime_counts.index = ["Low VIX", "Mid", "High VIX"]
+    regime_counts.index = ["Low", "Mid", "High"]
     st.bar_chart(regime_counts)
-
-    with st.expander("What does this mean?"):
-        st.markdown(
-            """
-The VIX is often used as a market volatility indicator.
-
-This dashboard:
-- Smooths VIX with a rolling average  
-- Labels time as low / mid / high volatility using quantiles  
-- Computes the same metrics inside those volatility environments
-
-It helps answer: **does the strategy behave differently when markets are calm vs volatile?**
-            """.strip()
-        )
 
 with tab_downloads:
     st.subheader("Downloads")
@@ -897,29 +766,29 @@ with tab_downloads:
 with tab_method:
     st.subheader("Method")
     st.markdown(
-        """
-**Portfolio construction**
-- Fixed universe of tickers (editable)
-- Rebalances on a schedule (monthly by default)
-- Selects the **top-ranked N** stocks and equal-weights them
+        f"""
+**Construction**
+- Fixed universe (editable)
+- Rebalance on a schedule
+- Rank stocks, take top **N**, equal-weight
 
 **Signals**
 - Value: trailing P/E (lower is better)
-- Profitability: ROE (higher is better)
+- Profit: ROE (higher is better)
 - Growth: revenue growth (higher is better)
-- Risk: realized volatility and debt-to-equity (lower is better)
-- Momentum: used as a tie-breaker
+- Risk: volatility + debt-to-equity (lower is better)
+- Momentum: tie-breaker
 
-**Processing**
-- Winsorization reduces the impact of extreme outliers
-- Cross-sectional z-scores standardize each signal
-- The final score is a weighted sum of z-scores
+**Scoring**
+- Winsorize
+- Cross-sectional z-scores
+- Weighted sum
 
 **Costs**
-- A simple turnover-based cost is applied on each rebalance date
+- Turnover-based cost applied on rebalance days
 
 **Notes**
 - Fundamentals are a current snapshot from yfinance (not point-in-time historical fundamentals)
-- This is a research prototype for education and exploration, not financial advice
+- Benchmark is **{benchmark}**
         """.strip()
     )
