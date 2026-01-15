@@ -386,31 +386,86 @@ except Exception:
 
 @st.cache_data(show_spinner=False, ttl=24 * 60 * 60)  # 24h
 def fetch_fundamentals(tickers: List[str]) -> pd.DataFrame:
+   import threading
+
+try:
+    from yfinance.exceptions import YFRateLimitError
+except Exception:
+    YFRateLimitError = Exception
+
+
+def _get_info_with_timeout(ticker: str, timeout_s: float = 2.0) -> Dict:
     """
-    Snapshot fundamentals from yfinance.
-    Robust to rate limiting: returns NaNs for failures instead of crashing.
+    Run yf.Ticker(t).info in a thread so we can enforce a hard timeout.
+    Returns {} on timeout or error.
+    """
+    out: Dict = {}
+    err: List[Exception] = []
+
+    def worker():
+        nonlocal out
+        try:
+            out = yf.Ticker(ticker).info or {}
+        except Exception as e:
+            err.append(e)
+
+    th = threading.Thread(target=worker, daemon=True)
+    th.start()
+    th.join(timeout=timeout_s)
+
+    # If still alive, we timed out
+    if th.is_alive():
+        return {}
+
+    # If it errored, treat as missing
+    if err:
+        return {}
+
+    return out
+
+
+@st.cache_data(show_spinner=False, ttl=24 * 60 * 60)  # cache 24h
+def fetch_fundamentals(tickers: List[str]) -> pd.DataFrame:
+    """
+    Snapshot fundamentals from yfinance with:
+    - hard per-ticker timeouts
+    - a hard total time budget (won't block the app)
+    - graceful degradation (returns NaNs instead of crashing)
     """
     tickers = list(dict.fromkeys([t.strip().upper() for t in tickers if t and t.strip()]))
 
     rows = []
     failures = 0
     rate_limited = 0
+    timeouts = 0
+
+    # Hard budget: fundamentals step will never run longer than this.
+    # Tune: 8–15 seconds is a good range on Streamlit Cloud.
+    BUDGET_S = 12.0
+    t0 = time.monotonic()
 
     for t in tickers:
+        if (time.monotonic() - t0) > BUDGET_S:
+            # Budget exceeded: fill remaining tickers with NaNs and exit fast
+            failures += (len(tickers) - len(rows))
+            break
+
+        # tiny jitter helps avoid bursting in shared environments
+        time.sleep(0.02 + random.random() * 0.03)
+
         info: Dict = {}
+        try:
+            info = _get_info_with_timeout(t, timeout_s=2.0)
+        except YFRateLimitError:
+            rate_limited += 1
+            info = {}
+        except Exception:
+            info = {}
 
-        # jitter reduces burstiness in shared Streamlit Cloud environments
-        time.sleep(0.05 + random.random() * 0.05)
-
-        for attempt in range(3):
-            try:
-                info = yf.Ticker(t).info or {}
-                break
-            except YFRateLimitError:
-                rate_limited += 1
-                time.sleep(1.5 * (attempt + 1))
-            except Exception:
-                time.sleep(0.4 * (attempt + 1))
+        if not info:
+            # distinguish timeout vs other failure (best-effort)
+            # (we can’t perfectly detect timeout here, but empty after timeout wrapper is a good proxy)
+            timeouts += 1
 
         if not info:
             failures += 1
@@ -423,11 +478,29 @@ def fetch_fundamentals(tickers: List[str]) -> pd.DataFrame:
             "debtToEquity": safe_float(info.get("debtToEquity")),
         })
 
+    # If we broke early due to budget, pad remaining tickers so index lines up
+    if len(rows) < len(tickers):
+        remaining = tickers[len(rows):]
+        for t in remaining:
+            rows.append({
+                "ticker": t,
+                "trailingPE": np.nan,
+                "ROE": np.nan,
+                "revenueGrowth": np.nan,
+                "debtToEquity": np.nan,
+            })
+
     df = pd.DataFrame(rows).set_index("ticker")
-    df.attrs["failures"] = failures
-    df.attrs["rate_limited"] = rate_limited
-    df.attrs["n"] = len(tickers)
+
+    df.attrs["failures"] = int(failures)
+    df.attrs["rate_limited"] = int(rate_limited)
+    df.attrs["timeouts"] = int(timeouts)
+    df.attrs["n"] = int(len(tickers))
+    df.attrs["elapsed_s"] = float(time.monotonic() - t0)
+    df.attrs["budget_s"] = float(BUDGET_S)
+
     return df
+ df
 
 
 def compute_price_factors(prices: pd.DataFrame, mom_lb: int, vol_lb: int):
