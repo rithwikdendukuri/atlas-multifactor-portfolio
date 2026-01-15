@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import warnings
+import time
+import random
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
@@ -136,7 +138,6 @@ def apply_mode_theme(advanced: bool) -> None:
            Force NAVY text inside all input boxes / selects / number inputs.
            ----------------------------------------------------------------- */
 
-        /* Streamlit testid inputs */
         [data-testid="stSidebar"] [data-testid="stTextInput"] input,
         [data-testid="stSidebar"] [data-testid="stTextArea"] textarea,
         [data-testid="stSidebar"] [data-testid="stNumberInput"] input{{
@@ -154,7 +155,6 @@ def apply_mode_theme(advanced: bool) -> None:
           -webkit-text-fill-color: rgba(11,22,51,0.55) !important;
         }}
 
-        /* BaseWeb inputs/selects used by Streamlit (covers selectbox & some number inputs) */
         [data-testid="stSidebar"] [data-baseweb="input"] input,
         [data-testid="stSidebar"] [data-baseweb="textarea"] textarea{{
           background: #ffffff !important;
@@ -175,7 +175,6 @@ def apply_mode_theme(advanced: bool) -> None:
           border-radius: 12px !important;
         }}
 
-        /* Combobox role (some Streamlit builds) */
         [data-testid="stSidebar"] div[role="combobox"],
         [data-testid="stSidebar"] div[role="combobox"] *{{
           background: #ffffff !important;
@@ -184,7 +183,6 @@ def apply_mode_theme(advanced: bool) -> None:
           fill: {NAVY_TEXT} !important;
         }}
 
-        /* Dropdown menu */
         div[role="listbox"]{{
           background: #ffffff !important;
           border: 1px solid rgba(15,23,42,0.18) !important;
@@ -198,7 +196,6 @@ def apply_mode_theme(advanced: bool) -> None:
           background: rgba(37,99,235,0.12) !important;
         }}
 
-        /* Download buttons */
         [data-testid="stDownloadButton"] > button{{
           background: rgba(255,255,255,0.12) !important;
           color: var(--text) !important;
@@ -355,7 +352,10 @@ def cagr(equity: pd.Series) -> float:
     return float(equity.iloc[-1] ** (1 / years) - 1)
 
 
-@st.cache_data(show_spinner=False)
+# -----------------------------
+# Robust caching for downloads
+# -----------------------------
+@st.cache_data(show_spinner=False, ttl=60 * 60)  # 1h
 def download_prices(tickers: List[str], start: str, end: Optional[str]) -> pd.DataFrame:
     df = yf.download(tickers, start=start, end=end, auto_adjust=True, progress=False)
     px = df["Close"] if isinstance(df.columns, pd.MultiIndex) else df
@@ -365,7 +365,7 @@ def download_prices(tickers: List[str], start: str, end: Optional[str]) -> pd.Da
     return px
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, ttl=60 * 60)  # 1h
 def download_close(ticker: str, start: str, end: Optional[str]) -> pd.Series:
     df = yf.download([ticker], start=start, end=end, auto_adjust=True, progress=False)
     if isinstance(df.columns, pd.MultiIndex):
@@ -375,11 +375,46 @@ def download_close(ticker: str, start: str, end: Optional[str]) -> pd.Series:
     return s.dropna()
 
 
-@st.cache_data(show_spinner=False)
+# -----------------------------
+# Robust fundamentals fetching
+# -----------------------------
+try:
+    from yfinance.exceptions import YFRateLimitError
+except Exception:
+    YFRateLimitError = Exception
+
+
+@st.cache_data(show_spinner=False, ttl=24 * 60 * 60)  # 24h
 def fetch_fundamentals(tickers: List[str]) -> pd.DataFrame:
+    """
+    Snapshot fundamentals from yfinance.
+    Robust to rate limiting: returns NaNs for failures instead of crashing.
+    """
+    tickers = list(dict.fromkeys([t.strip().upper() for t in tickers if t and t.strip()]))
+
     rows = []
+    failures = 0
+    rate_limited = 0
+
     for t in tickers:
-        info = yf.Ticker(t).info or {}
+        info: Dict = {}
+
+        # jitter reduces burstiness in shared Streamlit Cloud environments
+        time.sleep(0.05 + random.random() * 0.05)
+
+        for attempt in range(3):
+            try:
+                info = yf.Ticker(t).info or {}
+                break
+            except YFRateLimitError:
+                rate_limited += 1
+                time.sleep(1.5 * (attempt + 1))
+            except Exception:
+                time.sleep(0.4 * (attempt + 1))
+
+        if not info:
+            failures += 1
+
         rows.append({
             "ticker": t,
             "trailingPE": safe_float(info.get("trailingPE")),
@@ -387,7 +422,12 @@ def fetch_fundamentals(tickers: List[str]) -> pd.DataFrame:
             "revenueGrowth": safe_float(info.get("revenueGrowth")),
             "debtToEquity": safe_float(info.get("debtToEquity")),
         })
-    return pd.DataFrame(rows).set_index("ticker")
+
+    df = pd.DataFrame(rows).set_index("ticker")
+    df.attrs["failures"] = failures
+    df.attrs["rate_limited"] = rate_limited
+    df.attrs["n"] = len(tickers)
+    return df
 
 
 def compute_price_factors(prices: pd.DataFrame, mom_lb: int, vol_lb: int):
@@ -717,9 +757,19 @@ if bench_px is None or bench_px.dropna().empty:
     st.stop()
 
 with st.spinner("Fundamentals"):
-    fundamentals = fetch_fundamentals(list(prices.columns)).reindex(prices.columns)
+    # sorted() stabilizes the cache key (reduces cache misses)
+    fundamentals = fetch_fundamentals(sorted(list(prices.columns))).reindex(prices.columns)
 
+failures = int(fundamentals.attrs.get("failures", 0))
+rate_limited = int(fundamentals.attrs.get("rate_limited", 0))
+n_f = int(fundamentals.attrs.get("n", max(1, len(fundamentals))))
 fund_missing_rate = float(fundamentals.isna().mean().mean())
+
+if rate_limited > 0:
+    st.warning("Yahoo Finance is rate-limiting requests right now. Fundamentals may be incomplete; try again later.")
+elif failures > 0 and failures / max(1, n_f) > 0.15:
+    st.warning("Some fundamentals could not be fetched today. Results may be slightly noisier.")
+
 if fund_missing_rate > 0.6:
     st.warning("Many fundamentals are missing from the data source. Treat results as directional.")
 
