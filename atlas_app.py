@@ -500,7 +500,6 @@ def fetch_fundamentals(tickers: List[str]) -> pd.DataFrame:
     df.attrs["budget_s"] = float(BUDGET_S)
 
     return df
- df
 
 
 def compute_price_factors(prices: pd.DataFrame, mom_lb: int, vol_lb: int):
