@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-import warnings
 import time
 import random
 import threading
+import warnings
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+import requests
 import yfinance as yf
 import matplotlib.pyplot as plt
 import streamlit as st
@@ -21,56 +22,59 @@ except Exception:
 warnings.filterwarnings("ignore")
 plt.rcParams["figure.dpi"] = 140
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Constants
+# ─────────────────────────────────────────────────────────────────────────────
+
 DEFAULT_TICKERS: List[str] = [
     "AAPL","MSFT","NVDA","AMZN","GOOGL","GOOG","META","BRK-B","LLY","AVGO",
     "JPM","TSLA","V","XOM","UNH","MA","COST","HD","PG","JNJ",
     "ORCL","MRK","ABBV","CVX","NFLX","KO","CRM","BAC","WMT","PEP",
     "AMD","ADBE","TMO","MCD","QCOM","NKE","LIN","DIS","CSCO","ABT",
-    "ACN","VZ","TXN","DHR","INTC","NEE","PM","UPS","MS","AMGN"
+    "ACN","VZ","TXN","DHR","INTC","NEE","PM","UPS","MS","AMGN",
 ]
 
-DEFAULT_BENCHMARK = "SPY"
-DEFAULT_TOP_N = 30
-DEFAULT_REBALANCE = "M"
-
-DEFAULT_MOM_LB = 252
-DEFAULT_VOL_LB = 252
+DEFAULT_BENCHMARK                 = "SPY"
+DEFAULT_TOP_N                     = 30
+DEFAULT_REBALANCE                 = "M"
+DEFAULT_MOM_LB                    = 252
+DEFAULT_VOL_LB                    = 252
+DEFAULT_TC_BPS_PER_100_TURNOVER   = 10.0
+DEFAULT_VIX_TICKER                = "^VIX"
+DEFAULT_VIX_SMOOTH_DAYS           = 63
+DEFAULT_LOW_Q                     = 0.33
+DEFAULT_HIGH_Q                    = 0.67
 
 DEFAULT_WEIGHTS: Dict[str, float] = {
-    "value_pe": 0.20,
+    "value_pe":   0.20,
     "profit_roe": 0.20,
     "growth_rev": 0.20,
-    "risk_vol": 0.20,
-    "risk_de": 0.20,
+    "risk_vol":   0.20,
+    "risk_de":    0.20,
 }
 
-DEFAULT_TC_BPS_PER_100_TURNOVER = 10.0
-
-DEFAULT_VIX_TICKER = "^VIX"
-DEFAULT_VIX_SMOOTH_DAYS = 63
-DEFAULT_LOW_Q = 0.33
-DEFAULT_HIGH_Q = 0.67
-
 APP_VERSION = "Atlas"
+NAVY_TEXT   = "#0b1633"
 
-NAVY_TEXT = "#0b1633"
+# SEC EDGAR — required User-Agent per SEC policy; update to your email
+EDGAR_HEADERS    = {"User-Agent": "Atlas-Research rithwik.den@gmail.com"}
+FILING_LAG_DAYS  = 2      # days after filing date before treating data as known
+MAX_STALENESS    = 460    # days: annual filing considered stale beyond ~15 months
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# UI Theme
+# ─────────────────────────────────────────────────────────────────────────────
 
 def apply_mode_theme(advanced: bool) -> None:
     if advanced:
         css = f"""
         <style>
         :root{{
-          --bg:#0b1020;
-          --panel:#0f1730;
-          --text:#f3f6ff;
-          --muted:#cfd7ff;
-          --muted2:#aeb9e8;
-          --accent:#7aa2ff;
-          --border:rgba(255,255,255,0.14);
+          --bg:#0b1020; --panel:#0f1730; --text:#f3f6ff; --muted:#cfd7ff;
+          --muted2:#aeb9e8; --accent:#7aa2ff; --border:rgba(255,255,255,0.14);
           --shadow:rgba(0,0,0,0.35);
         }}
-
         .stApp{{
           background:
             radial-gradient(1200px 600px at 15% 10%, rgba(122,162,255,0.26), transparent 60%),
@@ -78,187 +82,56 @@ def apply_mode_theme(advanced: bool) -> None:
             var(--bg);
           color:var(--text);
         }}
-
-        html, body, [class*="css"]{{
-          color:var(--text) !important;
-          -webkit-font-smoothing: antialiased;
-          -moz-osx-font-smoothing: grayscale;
-        }}
-
-        .stMarkdown p, .stMarkdown li, .stMarkdown span {{ color: var(--text) !important; }}
-        .stCaption, .stMarkdown small {{ color: rgba(207,215,255,0.82) !important; }}
-
-        [data-testid="stSidebar"]{{
-          background: linear-gradient(180deg, rgba(15,23,48,0.98), rgba(8,12,26,0.98));
-          border-right:1px solid var(--border);
-        }}
-        [data-testid="stSidebar"] *{{ color:var(--text) !important; }}
-
-        label, .stTextInput label, .stSelectbox label, .stNumberInput label,
-        .stSlider label, .stRadio label, .stCheckbox label, .stToggle label{{
-          color: var(--text) !important;
-          font-weight: 650;
-        }}
-
-        .stButton>button{{
-          background: linear-gradient(180deg, rgba(122,162,255,1.0), rgba(88,129,255,1.0));
-          color:#0b1020 !important;
-          border:1px solid rgba(255,255,255,0.16);
-          border-radius:14px;
-          box-shadow:0 10px 25px var(--shadow);
-          font-weight:800;
-        }}
-
-        [data-testid="stMetric"]{{
-          background: rgba(255,255,255,0.06);
-          border:1px solid var(--border);
-          border-radius:16px;
-          padding:12px 12px;
-          box-shadow:0 10px 25px var(--shadow);
-        }}
-        [data-testid="stMetric"] *{{ color: var(--text) !important; }}
-
-        [data-testid="stDataFrame"]{{
-          background: rgba(255,255,255,0.04);
-          border:1px solid var(--border);
-          border-radius:16px;
-          padding:6px;
-          box-shadow:0 10px 25px var(--shadow);
-        }}
-
-        details{{
-          background: rgba(255,255,255,0.04);
-          border:1px solid var(--border);
-          border-radius:16px;
-          padding:8px 12px;
-        }}
-
-        button[role="tab"]{{ color: rgba(207,215,255,0.75) !important; }}
-        button[role="tab"][aria-selected="true"]{{
-          color: var(--text) !important;
-          border-bottom:2px solid var(--accent) !important;
-        }}
-
-        /* -----------------------------------------------------------------
-           FIX: sidebar inputs show white box + white text in some versions.
-           Force NAVY text inside all input boxes / selects / number inputs.
-           ----------------------------------------------------------------- */
-
+        html,body,[class*="css"]{{color:var(--text)!important;-webkit-font-smoothing:antialiased;}}
+        .stMarkdown p,.stMarkdown li,.stMarkdown span{{color:var(--text)!important;}}
+        .stCaption,.stMarkdown small{{color:rgba(207,215,255,0.82)!important;}}
+        [data-testid="stSidebar"]{{background:linear-gradient(180deg,rgba(15,23,48,0.98),rgba(8,12,26,0.98));border-right:1px solid var(--border);}}
+        [data-testid="stSidebar"] *{{color:var(--text)!important;}}
+        label,.stTextInput label,.stSelectbox label,.stNumberInput label,
+        .stSlider label,.stRadio label,.stCheckbox label,.stToggle label{{color:var(--text)!important;font-weight:650;}}
+        .stButton>button{{background:linear-gradient(180deg,rgba(122,162,255,1.0),rgba(88,129,255,1.0));color:#0b1020!important;border:1px solid rgba(255,255,255,0.16);border-radius:14px;box-shadow:0 10px 25px var(--shadow);font-weight:800;}}
+        [data-testid="stMetric"]{{background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:16px;padding:12px 12px;box-shadow:0 10px 25px var(--shadow);}}
+        [data-testid="stMetric"] *{{color:var(--text)!important;}}
+        [data-testid="stDataFrame"]{{background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:16px;padding:6px;box-shadow:0 10px 25px var(--shadow);}}
+        details{{background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:16px;padding:8px 12px;}}
+        button[role="tab"]{{color:rgba(207,215,255,0.75)!important;}}
+        button[role="tab"][aria-selected="true"]{{color:var(--text)!important;border-bottom:2px solid var(--accent)!important;}}
         [data-testid="stSidebar"] [data-testid="stTextInput"] input,
         [data-testid="stSidebar"] [data-testid="stTextArea"] textarea,
-        [data-testid="stSidebar"] [data-testid="stNumberInput"] input{{
-          background: #ffffff !important;
-          color: {NAVY_TEXT} !important;
-          -webkit-text-fill-color: {NAVY_TEXT} !important;
-          border: 1px solid rgba(15,23,42,0.18) !important;
-          border-radius: 12px !important;
-          caret-color: {NAVY_TEXT} !important;
-        }}
-
+        [data-testid="stSidebar"] [data-testid="stNumberInput"] input{{background:#ffffff!important;color:{NAVY_TEXT}!important;-webkit-text-fill-color:{NAVY_TEXT}!important;border:1px solid rgba(15,23,42,0.18)!important;border-radius:12px!important;caret-color:{NAVY_TEXT}!important;}}
         [data-testid="stSidebar"] [data-testid="stTextInput"] input::placeholder,
-        [data-testid="stSidebar"] [data-testid="stTextArea"] textarea::placeholder{{
-          color: rgba(11,22,51,0.55) !important;
-          -webkit-text-fill-color: rgba(11,22,51,0.55) !important;
-        }}
-
+        [data-testid="stSidebar"] [data-testid="stTextArea"] textarea::placeholder{{color:rgba(11,22,51,0.55)!important;-webkit-text-fill-color:rgba(11,22,51,0.55)!important;}}
         [data-testid="stSidebar"] [data-baseweb="input"] input,
-        [data-testid="stSidebar"] [data-baseweb="textarea"] textarea{{
-          background: #ffffff !important;
-          color: {NAVY_TEXT} !important;
-          -webkit-text-fill-color: {NAVY_TEXT} !important;
-          caret-color: {NAVY_TEXT} !important;
-        }}
-
-        [data-testid="stSidebar"] [data-baseweb="select"] *{{
-          color: {NAVY_TEXT} !important;
-          -webkit-text-fill-color: {NAVY_TEXT} !important;
-          fill: {NAVY_TEXT} !important;
-        }}
-
-        [data-testid="stSidebar"] [data-baseweb="select"] > div{{
-          background: #ffffff !important;
-          border: 1px solid rgba(15,23,42,0.18) !important;
-          border-radius: 12px !important;
-        }}
-
+        [data-testid="stSidebar"] [data-baseweb="textarea"] textarea{{background:#ffffff!important;color:{NAVY_TEXT}!important;-webkit-text-fill-color:{NAVY_TEXT}!important;caret-color:{NAVY_TEXT}!important;}}
+        [data-testid="stSidebar"] [data-baseweb="select"] *{{color:{NAVY_TEXT}!important;-webkit-text-fill-color:{NAVY_TEXT}!important;fill:{NAVY_TEXT}!important;}}
+        [data-testid="stSidebar"] [data-baseweb="select"] > div{{background:#ffffff!important;border:1px solid rgba(15,23,42,0.18)!important;border-radius:12px!important;}}
         [data-testid="stSidebar"] div[role="combobox"],
-        [data-testid="stSidebar"] div[role="combobox"] *{{
-          background: #ffffff !important;
-          color: {NAVY_TEXT} !important;
-          -webkit-text-fill-color: {NAVY_TEXT} !important;
-          fill: {NAVY_TEXT} !important;
-        }}
-
-        div[role="listbox"]{{
-          background: #ffffff !important;
-          border: 1px solid rgba(15,23,42,0.18) !important;
-          border-radius: 12px !important;
-        }}
-        div[role="option"]{{
-          color: {NAVY_TEXT} !important;
-          background: transparent !important;
-        }}
-        div[role="option"]:hover{{
-          background: rgba(37,99,235,0.12) !important;
-        }}
-
-        [data-testid="stDownloadButton"] > button{{
-          background: rgba(255,255,255,0.12) !important;
-          color: var(--text) !important;
-          border: 1px solid rgba(255,255,255,0.22) !important;
-          border-radius: 14px !important;
-          font-weight: 800 !important;
-          box-shadow: 0 10px 22px var(--shadow) !important;
-        }}
-        [data-testid="stDownloadButton"] > button *{{
-          color: var(--text) !important;
-          fill: var(--text) !important;
-        }}
-        </style>
-        """
+        [data-testid="stSidebar"] div[role="combobox"] *{{background:#ffffff!important;color:{NAVY_TEXT}!important;-webkit-text-fill-color:{NAVY_TEXT}!important;fill:{NAVY_TEXT}!important;}}
+        div[role="listbox"]{{background:#ffffff!important;border:1px solid rgba(15,23,42,0.18)!important;border-radius:12px!important;}}
+        div[role="option"]{{color:{NAVY_TEXT}!important;background:transparent!important;}}
+        div[role="option"]:hover{{background:rgba(37,99,235,0.12)!important;}}
+        [data-testid="stDownloadButton"] > button{{background:rgba(255,255,255,0.12)!important;color:var(--text)!important;border:1px solid rgba(255,255,255,0.22)!important;border-radius:14px!important;font-weight:800!important;box-shadow:0 10px 22px var(--shadow)!important;}}
+        [data-testid="stDownloadButton"] > button *{{color:var(--text)!important;fill:var(--text)!important;}}
+        </style>"""
     else:
         css = """
         <style>
-        :root{
-          --bg:#ffffff; --panel:#f7f8fb; --text:#0f172a; --muted:#475569;
-          --accent:#2563eb; --border:rgba(15,23,42,0.10); --shadow:rgba(15,23,42,0.06);
-        }
-        .stApp{ background: var(--bg); color: var(--text); }
-        [data-testid="stSidebar"]{ background: var(--panel); border-right:1px solid var(--border); }
-        .stCaption, .stMarkdown p{ color: var(--muted) !important; }
-        .stButton>button{
-          background: var(--accent);
-          color:#ffffff !important;
-          border:1px solid var(--border);
-          border-radius:12px;
-          font-weight:800;
-        }
-        [data-testid="stMetric"]{
-          background:#ffffff;
-          border:1px solid var(--border);
-          border-radius:14px;
-          padding:12px 12px;
-          box-shadow:0 10px 20px var(--shadow);
-        }
-        [data-testid="stDataFrame"]{
-          background:#ffffff;
-          border:1px solid var(--border);
-          border-radius:14px;
-          padding:6px;
-          box-shadow:0 10px 20px var(--shadow);
-        }
-        details{ background:#ffffff; border:1px solid var(--border); border-radius:14px; padding:8px 12px; }
-        [data-testid="stDownloadButton"] > button{
-          background: var(--accent) !important;
-          color:#ffffff !important;
-          border:1px solid var(--border) !important;
-          border-radius:12px !important;
-          font-weight:800 !important;
-        }
-        </style>
-        """
+        :root{--bg:#ffffff;--panel:#f7f8fb;--text:#0f172a;--muted:#475569;--accent:#2563eb;--border:rgba(15,23,42,0.10);--shadow:rgba(15,23,42,0.06);}
+        .stApp{background:var(--bg);color:var(--text);}
+        [data-testid="stSidebar"]{background:var(--panel);border-right:1px solid var(--border);}
+        .stCaption,.stMarkdown p{color:var(--muted)!important;}
+        .stButton>button{background:var(--accent);color:#ffffff!important;border:1px solid var(--border);border-radius:12px;font-weight:800;}
+        [data-testid="stMetric"]{background:#ffffff;border:1px solid var(--border);border-radius:14px;padding:12px 12px;box-shadow:0 10px 20px var(--shadow);}
+        [data-testid="stDataFrame"]{background:#ffffff;border:1px solid var(--border);border-radius:14px;padding:6px;box-shadow:0 10px 20px var(--shadow);}
+        details{background:#ffffff;border:1px solid var(--border);border-radius:14px;padding:8px 12px;}
+        [data-testid="stDownloadButton"] > button{background:var(--accent)!important;color:#ffffff!important;border:1px solid var(--border)!important;border-radius:12px!important;font-weight:800!important;}
+        </style>"""
     st.markdown(css, unsafe_allow_html=True)
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Math & format helpers
+# ─────────────────────────────────────────────────────────────────────────────
 
 def zscore(s: pd.Series) -> pd.Series:
     sd = s.std(skipna=True)
@@ -267,7 +140,7 @@ def zscore(s: pd.Series) -> pd.Series:
     return (s - s.mean(skipna=True)) / sd
 
 
-def winsorize(s: pd.Series, lo=0.01, hi=0.99) -> pd.Series:
+def winsorize(s: pd.Series, lo: float = 0.01, hi: float = 0.99) -> pd.Series:
     ql, qh = s.quantile([lo, hi])
     return s.clip(ql, qh)
 
@@ -288,13 +161,13 @@ def safe_float(x) -> float:
 
 
 def fmt_pct(x: float, decimals: int = 2) -> str:
-    if x is None or np.isnan(x):
+    if x is None or (isinstance(x, float) and np.isnan(x)):
         return "—"
     return f"{x*100:.{decimals}f}%"
 
 
 def fmt_num(x: float, decimals: int = 2) -> str:
-    if x is None or np.isnan(x):
+    if x is None or (isinstance(x, float) and np.isnan(x)):
         return "—"
     return f"{x:.{decimals}f}"
 
@@ -317,6 +190,10 @@ def clean_ticker_list(text: str) -> List[str]:
     return uniq
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Performance metrics
+# ─────────────────────────────────────────────────────────────────────────────
+
 def annualized_return(r: pd.Series) -> float:
     return (1 + r).prod() ** (252 / len(r)) - 1 if len(r) > 0 else np.nan
 
@@ -333,7 +210,6 @@ def sharpe_ratio(r: pd.Series) -> float:
 
 
 def sortino_ratio(r: pd.Series) -> float:
-    """Sharpe using downside deviation only."""
     downside = r[r < 0]
     dd = downside.std()
     if len(r) < 2 or dd == 0 or np.isnan(dd):
@@ -342,7 +218,6 @@ def sortino_ratio(r: pd.Series) -> float:
 
 
 def calmar_ratio(equity: pd.Series) -> float:
-    """CAGR / |max drawdown|."""
     c = cagr(equity)
     mdd = max_drawdown(equity)
     if np.isnan(c) or np.isnan(mdd) or mdd == 0:
@@ -351,7 +226,6 @@ def calmar_ratio(equity: pd.Series) -> float:
 
 
 def beta(p: pd.Series, b: pd.Series) -> float:
-    """Portfolio beta to benchmark."""
     df = pd.DataFrame({"p": p, "b": b}).dropna()
     if len(df) < 2:
         return np.nan
@@ -363,7 +237,6 @@ def beta(p: pd.Series, b: pd.Series) -> float:
 
 
 def tracking_error(p: pd.Series, b: pd.Series) -> float:
-    """Annualized std of active returns."""
     diff = (p - b).dropna()
     if len(diff) < 2:
         return np.nan
@@ -396,10 +269,300 @@ def cagr(equity: pd.Series) -> float:
     return float(equity.iloc[-1] ** (1 / years) - 1)
 
 
-# -----------------------------
-# Robust caching for downloads
-# -----------------------------
-@st.cache_data(show_spinner=False, ttl=60 * 60)  # 1h
+# ─────────────────────────────────────────────────────────────────────────────
+# SEC EDGAR — Point-in-time fundamentals
+# ─────────────────────────────────────────────────────────────────────────────
+
+@st.cache_data(ttl=7 * 24 * 60 * 60, show_spinner=False)
+def load_cik_map() -> Dict[str, int]:
+    """
+    Download the full SEC EDGAR ticker → CIK mapping.
+    Cached for 1 week. Returns {} on failure.
+    """
+    url = "https://data.sec.gov/files/company_tickers.json"
+    try:
+        r = requests.get(url, headers=EDGAR_HEADERS, timeout=15)
+        r.raise_for_status()
+        data = r.json()
+        return {v["ticker"].upper(): int(v["cik_str"]) for v in data.values()}
+    except Exception:
+        return {}
+
+
+@st.cache_data(ttl=24 * 60 * 60, show_spinner=False)
+def fetch_company_facts(cik: int) -> dict:
+    """
+    Download all XBRL facts for one company (all historical filings).
+    Cached for 24 h. Returns {} on any error.
+    """
+    url = f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json"
+    try:
+        r = requests.get(url, headers=EDGAR_HEADERS, timeout=20)
+        if r.status_code == 404:
+            return {}
+        r.raise_for_status()
+        return r.json()
+    except Exception:
+        return {}
+
+
+def _extract_series(facts: dict, concept: str, unit: str = "USD") -> pd.DataFrame:
+    """
+    Extract the full filing history for one US-GAAP XBRL concept.
+
+    Returns DataFrame with columns: end, filed, val, form, fp
+    Only 10-K / 10-K/A / 10-Q / 10-Q/A forms are kept.
+    """
+    try:
+        entries = facts["facts"]["us-gaap"][concept]["units"][unit]
+    except KeyError:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(entries)
+    if df.empty or "filed" not in df.columns:
+        return pd.DataFrame()
+
+    df["end"]   = pd.to_datetime(df["end"],   errors="coerce")
+    df["filed"] = pd.to_datetime(df["filed"], errors="coerce")
+    df = df[df["form"].isin(["10-K", "10-K/A", "10-Q", "10-Q/A"])]
+    df = df.dropna(subset=["end", "filed", "val"])
+    return df.sort_values("filed").reset_index(drop=True)
+
+
+def _pit_flow_ttm(df: pd.DataFrame, as_of: pd.Timestamp) -> float:
+    """
+    Trailing-twelve-month value of a flow variable (net income, revenue, EPS)
+    using ONLY filings available on or before `as_of` minus FILING_LAG_DAYS.
+
+    Strategy:
+      1. Find the most recent annual (10-K) filed on or before cutoff.
+      2. If newer quarterly (10-Q) filings exist, sum the last 4 quarters
+         to get a cleaner TTM estimate.
+      3. Fall back to the bare annual value when quarterly detail is sparse.
+      4. Return NaN if the most recent annual period end is stale.
+    """
+    if df.empty:
+        return np.nan
+
+    cutoff = as_of - pd.Timedelta(days=FILING_LAG_DAYS)
+    avail  = df[df["filed"] <= cutoff]
+    if avail.empty:
+        return np.nan
+
+    annual = avail[avail["form"].isin(["10-K", "10-K/A"])].sort_values("end")
+    if annual.empty:
+        return np.nan
+
+    last_annual = annual.iloc[-1]
+    ann_end     = last_annual["end"]
+
+    # Staleness check
+    if (cutoff - ann_end).days > MAX_STALENESS:
+        return np.nan
+
+    ann_val = float(last_annual["val"])
+
+    # Try to build TTM from last 4 quarterly filings
+    all_qtrs = avail[avail["form"].isin(["10-Q", "10-Q/A"])].copy()
+    if all_qtrs.empty:
+        return ann_val
+
+    # De-duplicate: one row per period end (keep the latest filing)
+    all_qtrs = (
+        all_qtrs.sort_values("filed")
+        .drop_duplicates(subset=["end"], keep="last")
+        .sort_values("end")
+    )
+
+    if len(all_qtrs) >= 4 and all_qtrs.iloc[-1]["end"] > ann_end:
+        return float(all_qtrs.tail(4)["val"].sum())
+
+    return ann_val
+
+
+def _pit_balance_sheet(df: pd.DataFrame, as_of: pd.Timestamp) -> float:
+    """
+    Most-recent balance sheet snapshot (equity, shares, debt) as of `as_of`.
+    Balance sheet items are period-end snapshots, not cumulative flows.
+    """
+    if df.empty:
+        return np.nan
+    cutoff = as_of - pd.Timedelta(days=FILING_LAG_DAYS)
+    avail  = df[df["filed"] <= cutoff].sort_values("filed")
+    if avail.empty:
+        return np.nan
+    return float(avail.iloc[-1]["val"])
+
+
+def _pit_revenue_growth(rev_df: pd.DataFrame, as_of: pd.Timestamp) -> float:
+    """Year-over-year revenue growth using the two most recent annual filings."""
+    if rev_df.empty:
+        return np.nan
+    cutoff = as_of - pd.Timedelta(days=FILING_LAG_DAYS)
+    annual = (
+        rev_df[rev_df["form"].isin(["10-K", "10-K/A"]) & (rev_df["filed"] <= cutoff)]
+        .sort_values("end")
+    )
+    if len(annual) < 2:
+        return np.nan
+    curr = float(annual.iloc[-1]["val"])
+    prev = float(annual.iloc[-2]["val"])
+    if prev == 0 or np.isnan(prev):
+        return np.nan
+    return curr / prev - 1.0
+
+
+# Concept fallback chains (companies use different XBRL tags)
+_REVENUE_CONCEPTS = [
+    "RevenueFromContractWithCustomerExcludingAssessedTax",
+    "Revenues",
+    "SalesRevenueNet",
+    "RevenueFromContractWithCustomerIncludingAssessedTax",
+    "SalesRevenueGoodsNet",
+]
+_SHARES_CONCEPTS = [
+    "CommonStockSharesOutstanding",
+    "CommonStockSharesIssued",
+]
+_DEBT_CONCEPTS = [
+    "LongTermDebt",
+    "LongTermDebtAndCapitalLeaseObligations",
+    "DebtAndCapitalLeaseObligations",
+]
+
+
+def _first_nonempty(facts: dict, concepts: List[str], unit: str = "USD") -> pd.DataFrame:
+    for c in concepts:
+        df = _extract_series(facts, c, unit)
+        if not df.empty:
+            return df
+    return pd.DataFrame()
+
+
+def _pit_snapshot_one(
+    ticker: str,
+    facts: dict,
+    as_of: pd.Timestamp,
+    price: float,
+) -> Dict[str, float]:
+    """
+    Return PIT fundamentals for a single ticker as of `as_of`.
+    Only uses data from SEC filings submitted on or before as_of − FILING_LAG_DAYS.
+    """
+    nan_row = {"trailingPE": np.nan, "ROE": np.nan,
+               "revenueGrowth": np.nan, "debtToEquity": np.nan}
+
+    if not facts or not np.isfinite(price) or price <= 0:
+        return nan_row
+
+    # Net income TTM
+    ni_df  = _extract_series(facts, "NetIncomeLoss")
+    ni_ttm = _pit_flow_ttm(ni_df, as_of)
+
+    # Revenue (YoY growth)
+    rev_df     = _first_nonempty(facts, _REVENUE_CONCEPTS)
+    rev_growth = _pit_revenue_growth(rev_df, as_of)
+
+    # Stockholders' equity (balance sheet)
+    eq_df  = _extract_series(facts, "StockholdersEquity")
+    equity = _pit_balance_sheet(eq_df, as_of)
+
+    # ROE = net income TTM / equity
+    roe = np.nan
+    if np.isfinite(ni_ttm) and np.isfinite(equity) and equity != 0:
+        roe = ni_ttm / equity
+
+    # Shares outstanding → EPS → P/E
+    shares_df = _first_nonempty(facts, _SHARES_CONCEPTS, unit="shares")
+    shares    = _pit_balance_sheet(shares_df, as_of)
+    pe = np.nan
+    if np.isfinite(ni_ttm) and np.isfinite(shares) and shares > 0:
+        eps = ni_ttm / shares
+        if eps > 0:
+            pe = price / eps
+
+    # Debt / equity
+    debt_df = _first_nonempty(facts, _DEBT_CONCEPTS)
+    debt    = _pit_balance_sheet(debt_df, as_of)
+    de = np.nan
+    if np.isfinite(debt) and np.isfinite(equity) and equity != 0:
+        de = debt / equity
+
+    return {"trailingPE": pe, "ROE": roe,
+            "revenueGrowth": rev_growth, "debtToEquity": de}
+
+
+@st.cache_data(ttl=24 * 60 * 60, show_spinner=False)
+def build_pit_fund_matrix(
+    tickers: Tuple[str, ...],          # tuple for hashability in st.cache_data
+    rebal_dates: Tuple[pd.Timestamp, ...],
+    prices: pd.DataFrame,
+    budget_s: float = 90.0,
+) -> Dict[str, pd.DataFrame]:
+    """
+    Build {date_str → fundamentals_DataFrame} for every rebalance date.
+
+    Each DataFrame is indexed by ticker with columns:
+        trailingPE, ROE, revenueGrowth, debtToEquity
+
+    Only SEC filings submitted on or before that rebalance date are used.
+    EDGAR downloads are cached for 24 h, so re-runs are instant.
+
+    Returns date keys as ISO strings (e.g. "2021-06-30") for JSON
+    serializability with st.cache_data.
+    """
+    tickers_list = list(tickers)
+    t0 = time.monotonic()
+
+    # Step 1: resolve CIKs
+    cik_map = load_cik_map()
+
+    # Step 2: download company facts once per ticker
+    facts_by_ticker: Dict[str, dict] = {}
+    n = len(tickers_list)
+    progress = st.progress(0, text="Downloading SEC EDGAR filings…")
+    for i, tick in enumerate(tickers_list):
+        if (time.monotonic() - t0) > budget_s:
+            # Budget exceeded — remaining tickers get NaN
+            for t in tickers_list[i:]:
+                facts_by_ticker[t] = {}
+            break
+        cik = cik_map.get(tick.upper())
+        facts_by_ticker[tick] = fetch_company_facts(cik) if cik else {}
+        time.sleep(0.12)   # ~8 req/s — SEC limit is ~10/s
+        progress.progress((i + 1) / n, text=f"EDGAR: {tick} ({i+1}/{n})")
+
+    progress.empty()
+
+    # Step 3: for each rebalance date, extract PIT snapshots
+    result: Dict[str, pd.DataFrame] = {}
+    for date in rebal_dates:
+        date_ts = pd.Timestamp(date)
+        rows = []
+        for tick in tickers_list:
+            px_val = np.nan
+            if date_ts in prices.index and tick in prices.columns:
+                px_val = float(prices.loc[date_ts, tick])
+            row = _pit_snapshot_one(
+                ticker=tick,
+                facts=facts_by_ticker.get(tick, {}),
+                as_of=date_ts,
+                price=px_val,
+            )
+            row["ticker"] = tick
+            rows.append(row)
+
+        df = pd.DataFrame(rows).set_index("ticker")
+        result[date_ts.isoformat()] = df
+
+    return result
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Price data downloaders
+# ─────────────────────────────────────────────────────────────────────────────
+
+@st.cache_data(show_spinner=False, ttl=60 * 60)
 def download_prices(tickers: List[str], start: str, end: Optional[str]) -> pd.DataFrame:
     df = yf.download(tickers, start=start, end=end, auto_adjust=True, progress=False)
     px = df["Close"] if isinstance(df.columns, pd.MultiIndex) else df
@@ -409,7 +572,7 @@ def download_prices(tickers: List[str], start: str, end: Optional[str]) -> pd.Da
     return px
 
 
-@st.cache_data(show_spinner=False, ttl=60 * 60)  # 1h
+@st.cache_data(show_spinner=False, ttl=60 * 60)
 def download_close(ticker: str, start: str, end: Optional[str]) -> pd.Series:
     df = yf.download([ticker], start=start, end=end, auto_adjust=True, progress=False)
     if isinstance(df.columns, pd.MultiIndex):
@@ -419,197 +582,125 @@ def download_close(ticker: str, start: str, end: Optional[str]) -> pd.Series:
     return s.dropna()
 
 
-# -----------------------------
-# Robust fundamentals fetching
-# -----------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# Factor scoring (PIT version)
+# ─────────────────────────────────────────────────────────────────────────────
 
-def _get_info_with_timeout(ticker: str, timeout_s: float = 2.0) -> Dict:
-    """
-    Run yf.Ticker(t).info in a thread so we can enforce a hard timeout.
-    Returns {} on timeout or error.
-    """
-    out: Dict = {}
-    err: List[Exception] = []
-
-    def worker():
-        nonlocal out
-        try:
-            out = yf.Ticker(ticker).info or {}
-        except Exception as e:
-            err.append(e)
-
-    th = threading.Thread(target=worker, daemon=True)
-    th.start()
-    th.join(timeout=timeout_s)
-
-    # If still alive, we timed out
-    if th.is_alive():
-        return {}
-
-    # If it errored, treat as missing
-    if err:
-        return {}
-
-    return out
-
-
-@st.cache_data(show_spinner=False, ttl=24 * 60 * 60)  # cache 24h
-def fetch_fundamentals(tickers: List[str]) -> pd.DataFrame:
-    """
-    Snapshot fundamentals from yfinance with:
-    - hard per-ticker timeouts
-    - a hard total time budget (won't block the app)
-    - graceful degradation (returns NaNs instead of crashing)
-    """
-    tickers = list(dict.fromkeys([t.strip().upper() for t in tickers if t and t.strip()]))
-
-    rows = []
-    failures = 0
-    rate_limited = 0
-    timeouts = 0
-
-    # Hard budget: fundamentals step will never run longer than this.
-    # Tune: 8–15 seconds is a good range on Streamlit Cloud.
-    BUDGET_S = 12.0
-    t0 = time.monotonic()
-
-    for t in tickers:
-        if (time.monotonic() - t0) > BUDGET_S:
-            # Budget exceeded: fill remaining tickers with NaNs and exit fast
-            failures += (len(tickers) - len(rows))
-            break
-
-        # tiny jitter helps avoid bursting in shared environments
-        time.sleep(0.02 + random.random() * 0.03)
-
-        info: Dict = {}
-        try:
-            info = _get_info_with_timeout(t, timeout_s=2.0)
-        except YFRateLimitError:
-            rate_limited += 1
-            info = {}
-        except Exception:
-            info = {}
-
-        if not info:
-            # distinguish timeout vs other failure (best-effort)
-            # (we can't perfectly detect timeout here, but empty after timeout wrapper is a good proxy)
-            timeouts += 1
-
-        if not info:
-            failures += 1
-
-        rows.append({
-            "ticker": t,
-            "trailingPE": safe_float(info.get("trailingPE")),
-            "ROE": safe_float(info.get("returnOnEquity")),
-            "revenueGrowth": safe_float(info.get("revenueGrowth")),
-            "debtToEquity": safe_float(info.get("debtToEquity")),
-        })
-
-    # If we broke early due to budget, pad remaining tickers so index lines up
-    if len(rows) < len(tickers):
-        remaining = tickers[len(rows):]
-        for t in remaining:
-            rows.append({
-                "ticker": t,
-                "trailingPE": np.nan,
-                "ROE": np.nan,
-                "revenueGrowth": np.nan,
-                "debtToEquity": np.nan,
-            })
-
-    df = pd.DataFrame(rows).set_index("ticker")
-
-    df.attrs["failures"] = int(failures)
-    df.attrs["rate_limited"] = int(rate_limited)
-    df.attrs["timeouts"] = int(timeouts)
-    df.attrs["n"] = int(len(tickers))
-    df.attrs["elapsed_s"] = float(time.monotonic() - t0)
-    df.attrs["budget_s"] = float(BUDGET_S)
-
-    return df
-
-
-def compute_price_factors(prices: pd.DataFrame, mom_lb: int, vol_lb: int):
-    rets = prices.pct_change()
-    momentum = prices / prices.shift(mom_lb) - 1
-    vol = rets.rolling(vol_lb).std() * np.sqrt(252)
-    return momentum, vol
-
-
-def make_scores_full(
+def make_scores_pit(
+    date: pd.Timestamp,
     momentum_row: pd.Series,
     vol_row: pd.Series,
-    fundamentals: pd.DataFrame,
+    pit_fund_matrix: Dict[str, pd.DataFrame],
     weights: Dict[str, float],
 ) -> pd.DataFrame:
-    raw = pd.DataFrame(index=fundamentals.index)
-    raw["value_pe"] = fundamentals["trailingPE"]
-    raw["profit_roe"] = fundamentals["ROE"]
-    raw["growth_rev"] = fundamentals["revenueGrowth"]
-    raw["risk_vol"] = vol_row
-    raw["risk_de"] = fundamentals["debtToEquity"]
-    raw["mom_12m"] = momentum_row
+    """
+    Compute composite factor scores for every ticker on a given rebalance date.
+    Fundamentals are drawn from the PIT matrix keyed by date ISO string.
 
+    Signals:
+        value_pe    — trailing P/E (lower preferred; negated z-score)
+        profit_roe  — return on equity (higher preferred)
+        growth_rev  — YoY revenue growth (higher preferred)
+        risk_vol    — annualized realized volatility (lower preferred; negated)
+        risk_de     — debt/equity (lower preferred; negated)
+        mom_12m     — 12-month momentum (tie-breaker only; not in weighted score)
+    """
+    date_key   = pd.Timestamp(date).isoformat()
+    fund_df    = pit_fund_matrix.get(date_key, pd.DataFrame())
+
+    # Build raw factor matrix aligned to the universe at this date
+    universe = momentum_row.index if not fund_df.empty else momentum_row.index
+    raw = pd.DataFrame(index=universe)
+
+    if not fund_df.empty:
+        raw["value_pe"]   = fund_df["trailingPE"].reindex(universe)
+        raw["profit_roe"] = fund_df["ROE"].reindex(universe)
+        raw["growth_rev"] = fund_df["revenueGrowth"].reindex(universe)
+        raw["risk_de"]    = fund_df["debtToEquity"].reindex(universe)
+    else:
+        raw["value_pe"]   = np.nan
+        raw["profit_roe"] = np.nan
+        raw["growth_rev"] = np.nan
+        raw["risk_de"]    = np.nan
+
+    raw["risk_vol"] = vol_row.reindex(universe)
+    raw["mom_12m"]  = momentum_row.reindex(universe)
+
+    # Winsorize each factor
     for c in raw.columns:
         raw[c] = winsorize(raw[c])
 
+    # Z-score; negate factors where lower = better
     z = pd.DataFrame(index=raw.index)
-    z["z_value_pe"] = -zscore(raw["value_pe"])
-    z["z_risk_vol"] = -zscore(raw["risk_vol"])
-    z["z_risk_de"] = -zscore(raw["risk_de"])
+    z["z_value_pe"]   = -zscore(raw["value_pe"])
+    z["z_risk_vol"]   = -zscore(raw["risk_vol"])
+    z["z_risk_de"]    = -zscore(raw["risk_de"])
     z["z_profit_roe"] = zscore(raw["profit_roe"])
     z["z_growth_rev"] = zscore(raw["growth_rev"])
-    z["z_mom_12m"] = zscore(raw["mom_12m"])
+    z["z_mom_12m"]    = zscore(raw["mom_12m"])
 
     out = pd.concat([raw, z], axis=1)
     out["score"] = (
-        out["z_value_pe"].fillna(0) * float(weights["value_pe"])
+          out["z_value_pe"].fillna(0)   * float(weights["value_pe"])
         + out["z_profit_roe"].fillna(0) * float(weights["profit_roe"])
         + out["z_growth_rev"].fillna(0) * float(weights["growth_rev"])
-        + out["z_risk_vol"].fillna(0) * float(weights["risk_vol"])
-        + out["z_risk_de"].fillna(0) * float(weights["risk_de"])
+        + out["z_risk_vol"].fillna(0)   * float(weights["risk_vol"])
+        + out["z_risk_de"].fillna(0)    * float(weights["risk_de"])
     )
     out["mom_z"] = out["z_mom_12m"]
     return out
 
 
-def turnover(prev: Optional[List[str]], curr: List[str]) -> float:
+# ─────────────────────────────────────────────────────────────────────────────
+# Portfolio construction helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+def compute_price_factors(prices: pd.DataFrame, mom_lb: int, vol_lb: int):
+    rets     = prices.pct_change()
+    momentum = prices / prices.shift(mom_lb) - 1
+    vol      = rets.rolling(vol_lb).std() * np.sqrt(252)
+    return momentum, vol
+
+
+def portfolio_turnover(prev: Optional[List[str]], curr: List[str]) -> float:
     if prev is None:
         return np.nan
     return 1 - len(set(prev) & set(curr)) / len(curr)
 
 
-def apply_costs(r: pd.Series, turn: float, tc_bps_per_100_turnover: float) -> pd.Series:
+def apply_costs(r: pd.Series, turn: float, tc_bps: float) -> pd.Series:
     if np.isnan(turn):
         return r
-    cost = (tc_bps_per_100_turnover / 10000) * turn
+    cost = (tc_bps / 10_000) * turn
     r = r.copy()
     r.iloc[0] -= cost
     return r
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Backtest
+# ─────────────────────────────────────────────────────────────────────────────
+
 @dataclass
 class BacktestOutput:
-    gross: pd.Series
-    net: pd.Series
-    bench: pd.Series
-    avg_turn: float
+    gross:            pd.Series
+    net:              pd.Series
+    bench:            pd.Series
+    avg_turn:         float
     holdings_changes: pd.DataFrame
-    rebal_dates: pd.DatetimeIndex
+    rebal_dates:      pd.DatetimeIndex
 
 
 def backtest(
-    prices: pd.DataFrame,
-    fundamentals: pd.DataFrame,
-    bench_px: pd.Series,
-    top_n: int,
-    rebalance: str,
-    mom_lb: int,
-    vol_lb: int,
-    weights: Dict[str, float],
-    tc_bps_per_100_turnover: float,
+    prices:                   pd.DataFrame,
+    pit_fund_matrix:          Dict[str, pd.DataFrame],
+    bench_px:                 pd.Series,
+    top_n:                    int,
+    rebalance:                str,
+    mom_lb:                   int,
+    vol_lb:                   int,
+    weights:                  Dict[str, float],
+    tc_bps_per_100_turnover:  float,
 ) -> BacktestOutput:
     momentum, vol = compute_price_factors(prices, mom_lb=mom_lb, vol_lb=vol_lb)
 
@@ -618,37 +709,40 @@ def backtest(
 
     gross, net, turns = [], [], []
     prev: Optional[List[str]] = None
-    holdings_log_rows = []
+    holdings_log = []
 
     for d0, d1 in zip(rebal_dates[:-1], rebal_dates[1:]):
-        scores = make_scores_full(momentum.loc[d0], vol.loc[d0], fundamentals, weights=weights)
+
+        # ── Scoring uses only PIT data available as of d0 ──────────────────
+        scores = make_scores_pit(
+            date         = d0,
+            momentum_row = momentum.loc[d0],
+            vol_row      = vol.loc[d0],
+            pit_fund_matrix = pit_fund_matrix,
+            weights      = weights,
+        )
+
         picks = scores.sort_values(["score", "mom_z"], ascending=False).head(top_n).index.tolist()
 
-        if prev is None:
-            added = sorted(picks)
-            removed = []
-            stayed = []
-        else:
-            added = sorted(set(picks) - set(prev))
-            removed = sorted(set(prev) - set(picks))
-            stayed = sorted(set(picks) & set(prev))
+        added   = sorted(set(picks) - set(prev)) if prev else sorted(picks)
+        removed = sorted(set(prev) - set(picks)) if prev else []
+        stayed  = sorted(set(picks) & set(prev)) if prev else []
 
-        turn = turnover(prev, picks)
-
-        holdings_log_rows.append({
-            "rebalance_date": pd.Timestamp(d0).date().isoformat(),
-            "num_held": len(picks),
-            "num_added": len(added),
-            "num_removed": len(removed),
-            "turnover_fraction": (None if np.isnan(turn) else float(turn)),
-            "added": ", ".join(added),
-            "removed": ", ".join(removed),
-            "stayed": ", ".join(stayed),
-            "held": ", ".join(sorted(picks)),
-        })
-
+        turn = portfolio_turnover(prev, picks)
         prev = picks
         turns.append(turn)
+
+        holdings_log.append({
+            "rebalance_date":    pd.Timestamp(d0).date().isoformat(),
+            "num_held":          len(picks),
+            "num_added":         len(added),
+            "num_removed":       len(removed),
+            "turnover_fraction": None if np.isnan(turn) else float(turn),
+            "added":             ", ".join(added),
+            "removed":           ", ".join(removed),
+            "stayed":            ", ".join(stayed),
+            "held":              ", ".join(sorted(picks)),
+        })
 
         period = prices.loc[d0:d1, picks].pct_change().dropna(how="all")
         if period.empty:
@@ -661,60 +755,101 @@ def backtest(
         net.append(n)
 
     gross = pd.concat(gross) if gross else pd.Series(dtype=float)
-    net = pd.concat(net) if net else pd.Series(dtype=float)
+    net   = pd.concat(net)   if net   else pd.Series(dtype=float)
 
     bench = bench_px.pct_change().reindex(gross.index).dropna()
     gross = gross.reindex(bench.index)
-    net = net.reindex(bench.index)
-
-    holdings_changes = pd.DataFrame(holdings_log_rows)
-    avg_turn = float(np.nanmean(turns)) if len(turns) else np.nan
+    net   = net.reindex(bench.index)
 
     return BacktestOutput(
-        gross=gross,
-        net=net,
-        bench=bench,
-        avg_turn=avg_turn,
-        holdings_changes=holdings_changes,
-        rebal_dates=rebal_dates,
+        gross            = gross,
+        net              = net,
+        bench            = bench,
+        avg_turn         = float(np.nanmean(turns)) if turns else np.nan,
+        holdings_changes = pd.DataFrame(holdings_log),
+        rebal_dates      = rebal_dates,
     )
 
 
-def compute_vix_regimes(vix_close: pd.Series, smooth_days: int, low_q: float, high_q: float) -> pd.Series:
+# ─────────────────────────────────────────────────────────────────────────────
+# VIX regime classification — walk-forward thresholds
+# ─────────────────────────────────────────────────────────────────────────────
+
+def compute_vix_regimes(
+    vix_close:   pd.Series,
+    smooth_days: int,
+    low_q:       float,
+    high_q:      float,
+    split_date:  Optional[pd.Timestamp] = None,
+) -> Tuple[pd.Series, float, float]:
+    """
+    Classify each day into low_vol / mid / high_vol using a rolling VIX average.
+
+    Walk-forward design: if split_date is provided, VIX quantile thresholds are
+    computed ONLY from the in-sample period (before split_date). The same
+    thresholds are then applied to the full date range (in + out of sample).
+    This prevents the regime labels themselves from incorporating future
+    information about the VIX distribution.
+
+    Returns: (regime_series, lo_threshold, hi_threshold)
+    """
     vix_smooth = vix_close.rolling(smooth_days).mean().dropna()
-    lo_thr = float(vix_smooth.quantile(low_q))
-    hi_thr = float(vix_smooth.quantile(high_q))
+
+    if split_date is not None:
+        in_sample = vix_smooth[vix_smooth.index < pd.Timestamp(split_date)]
+        if len(in_sample) >= 30:
+            lo_thr = float(in_sample.quantile(low_q))
+            hi_thr = float(in_sample.quantile(high_q))
+        else:
+            # Not enough in-sample data; fall back to full-sample
+            lo_thr = float(vix_smooth.quantile(low_q))
+            hi_thr = float(vix_smooth.quantile(high_q))
+    else:
+        lo_thr = float(vix_smooth.quantile(low_q))
+        hi_thr = float(vix_smooth.quantile(high_q))
+
     regime = pd.Series("mid", index=vix_smooth.index)
     regime[vix_smooth <= lo_thr] = "low_vol"
     regime[vix_smooth >= hi_thr] = "high_vol"
-    return regime
 
+    return regime, lo_thr, hi_thr
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Regime stats helpers
+# ─────────────────────────────────────────────────────────────────────────────
 
 def regime_stats(name: str, p: pd.Series, b: pd.Series) -> dict:
     p = p.dropna()
     b = b.reindex(p.index).dropna()
     p = p.reindex(b.index)
     return {
-        "regime": name,
-        "days": int(len(p)),
+        "regime":     name,
+        "days":       int(len(p)),
         "ann_return": float(annualized_return(p)),
-        "ann_vol": float(annualized_vol(p)),
-        "sharpe": float(sharpe_ratio(p)),
-        "sortino": float(sortino_ratio(p)),
+        "ann_vol":    float(annualized_vol(p)),
+        "sharpe":     float(sharpe_ratio(p)),
+        "sortino":    float(sortino_ratio(p)),
         "info_ratio": float(info_ratio(p, b)),
     }
 
 
 def safe_regime_row(label: str, p: pd.Series, b: pd.Series, min_days: int = 30) -> dict:
     if len(p.dropna()) < min_days:
-        return {"regime": label, "days": int(len(p.dropna())), "ann_return": np.nan, "ann_vol": np.nan, "sharpe": np.nan, "sortino": np.nan, "info_ratio": np.nan}
+        return {"regime": label, "days": int(len(p.dropna())),
+                "ann_return": np.nan, "ann_vol": np.nan,
+                "sharpe": np.nan, "sortino": np.nan, "info_ratio": np.nan}
     return regime_stats(label, p, b)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Equity curve helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
 def equity_df(gross: pd.Series, net: pd.Series, bench: pd.Series, bench_name: str) -> pd.DataFrame:
     return pd.DataFrame({
-        "Portfolio (Gross)": (1 + gross).cumprod(),
-        "Portfolio (Net)": (1 + net).cumprod(),
+        "Portfolio (Gross)":        (1 + gross).cumprod(),
+        "Portfolio (Net)":          (1 + net).cumprod(),
         f"Benchmark ({bench_name})": (1 + bench).cumprod(),
     })
 
@@ -737,8 +872,13 @@ def drawdown_series(equity: pd.Series) -> pd.Series:
     return equity / peak - 1.0
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Streamlit app
+# ─────────────────────────────────────────────────────────────────────────────
+
 st.set_page_config(page_title="Atlas", layout="wide")
 
+# ── Sidebar ──────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.caption(APP_VERSION)
 
@@ -751,15 +891,20 @@ with st.sidebar:
     profile = st.selectbox("Profile", ["Balanced", "Conservative", "Aggressive", "Custom"], index=0)
 
     st.markdown("**Dates**")
-    start = st.text_input("Start", value="2017-01-01" if beginner else "2016-01-01")
-    end_in = st.text_input("End (optional)", value="")
-    end = None if end_in.strip() == "" else end_in.strip()
+    start   = st.text_input("Start", value="2017-01-01" if beginner else "2016-01-01")
+    end_in  = st.text_input("End (optional)", value="")
+    end     = None if end_in.strip() == "" else end_in.strip()
 
     st.markdown("**Portfolio**")
-    rebalance_label = st.selectbox("Rebalance", ["Monthly", "Quarterly"] if beginner else ["Monthly", "Quarterly", "Weekly"], index=0)
-    rebalance = {"Monthly": "M", "Quarterly": "Q", "Weekly": "W"}[rebalance_label]
-    top_n = st.slider("Holdings", 10 if beginner else 5, 50, DEFAULT_TOP_N)
-    tc = st.number_input("Trading costs (bps / 100% turnover)", 0.0, 200.0, float(DEFAULT_TC_BPS_PER_100_TURNOVER), 1.0)
+    rebalance_label = st.selectbox(
+        "Rebalance",
+        ["Monthly", "Quarterly"] if beginner else ["Monthly", "Quarterly", "Weekly"],
+        index=0,
+    )
+    rebalance = {"Monthly": "ME", "Quarterly": "QE", "Weekly": "W"}[rebalance_label]
+    top_n     = st.slider("Holdings", 10 if beginner else 5, 50, DEFAULT_TOP_N)
+    tc        = st.number_input("Trading costs (bps / 100% turnover)", 0.0, 200.0,
+                                float(DEFAULT_TC_BPS_PER_100_TURNOVER), 1.0)
 
     st.markdown("**Benchmark**")
     benchmark = st.text_input("Ticker", value=DEFAULT_BENCHMARK)
@@ -768,13 +913,21 @@ with st.sidebar:
     vix_ticker = st.text_input("VIX ticker", value=DEFAULT_VIX_TICKER)
 
     if beginner:
-        vix_smooth = DEFAULT_VIX_SMOOTH_DAYS
-        low_q = DEFAULT_LOW_Q
-        high_q = DEFAULT_HIGH_Q
+        vix_smooth    = DEFAULT_VIX_SMOOTH_DAYS
+        low_q         = DEFAULT_LOW_Q
+        high_q        = DEFAULT_HIGH_Q
+        use_wf        = True    # walk-forward always on in beginner mode
+        split_date_in = None    # auto-split at 70% of date range
     else:
-        vix_smooth = st.number_input("Smoothing (days)", 5, 252, int(DEFAULT_VIX_SMOOTH_DAYS), 1)
-        low_q = st.slider("Low quantile", 0.05, 0.49, float(DEFAULT_LOW_Q), 0.01)
-        high_q = st.slider("High quantile", 0.51, 0.95, float(DEFAULT_HIGH_Q), 0.01)
+        vix_smooth    = st.number_input("Smoothing (days)", 5, 252, int(DEFAULT_VIX_SMOOTH_DAYS), 1)
+        low_q         = st.slider("Low quantile", 0.05, 0.49, float(DEFAULT_LOW_Q), 0.01)
+        high_q        = st.slider("High quantile", 0.51, 0.95, float(DEFAULT_HIGH_Q), 0.01)
+        use_wf        = st.toggle("Walk-forward VIX thresholds", value=True,
+                                  help="Compute VIX regime thresholds from in-sample data only, "
+                                       "then apply to the full period. Prevents look-ahead bias "
+                                       "in regime classification.")
+        split_date_in = st.text_input("In-sample / OOS split date", value="2021-01-01",
+                                      help="Thresholds are estimated on data before this date.") if use_wf else None
 
     st.markdown("**Lookback windows**")
     if advanced:
@@ -789,16 +942,18 @@ with st.sidebar:
 
     w = dict(DEFAULT_WEIGHTS)
     if profile == "Conservative":
-        w = {"value_pe": 0.15, "profit_roe": 0.15, "growth_rev": 0.15, "risk_vol": 0.30, "risk_de": 0.25}
+        w = {"value_pe": 0.15, "profit_roe": 0.15, "growth_rev": 0.15,
+             "risk_vol": 0.30, "risk_de": 0.25}
     elif profile == "Aggressive":
-        w = {"value_pe": 0.15, "profit_roe": 0.30, "growth_rev": 0.30, "risk_vol": 0.15, "risk_de": 0.10}
+        w = {"value_pe": 0.15, "profit_roe": 0.30, "growth_rev": 0.30,
+             "risk_vol": 0.15, "risk_de": 0.10}
 
     if profile == "Custom" or advanced:
-        w["value_pe"] = st.slider("Value (P/E)", 0.0, 1.0, float(w["value_pe"]), 0.05)
-        w["profit_roe"] = st.slider("Profit (ROE)", 0.0, 1.0, float(w["profit_roe"]), 0.05)
-        w["growth_rev"] = st.slider("Growth (rev)", 0.0, 1.0, float(w["growth_rev"]), 0.05)
-        w["risk_vol"] = st.slider("Risk (vol)", 0.0, 1.0, float(w["risk_vol"]), 0.05)
-        w["risk_de"] = st.slider("Risk (debt)", 0.0, 1.0, float(w["risk_de"]), 0.05)
+        w["value_pe"]   = st.slider("Value (P/E)",    0.0, 1.0, float(w["value_pe"]),   0.05)
+        w["profit_roe"] = st.slider("Profit (ROE)",   0.0, 1.0, float(w["profit_roe"]), 0.05)
+        w["growth_rev"] = st.slider("Growth (rev)",   0.0, 1.0, float(w["growth_rev"]), 0.05)
+        w["risk_vol"]   = st.slider("Risk (vol)",     0.0, 1.0, float(w["risk_vol"]),   0.05)
+        w["risk_de"]    = st.slider("Risk (debt)",    0.0, 1.0, float(w["risk_de"]),    0.05)
 
     weights = normalize_weights(w) if auto_norm else w
     st.caption(f"Weight sum: {sum(weights.values()):.2f}")
@@ -815,6 +970,7 @@ with st.sidebar:
     run = st.button("Run", type="primary")
 
 
+# ── Header ────────────────────────────────────────────────────────────────────
 st.title("Atlas")
 st.caption("A rules-based stock ranking model with a backtest and a volatility view.")
 
@@ -832,15 +988,15 @@ This uses historical data and is for learning and research.
     """.strip()
 )
 
-st.warning(
-    """
-**Important limitation:** Fundamentals (P/E, ROE, revenue growth, debt-to-equity) are pulled as a 
-**current snapshot** from Yahoo Finance, not as point-in-time historical data. 
-This means a backtest from 2017 uses 2026 fundamentals for all periods. 
-**Results are directional/educational only** and should not be interpreted as true 
-historical performance. For research-grade backtesting, use a point-in-time 
-fundamental database (e.g., Quandl/Sharadar, Compustat via WRDS).
-    """.strip()
+st.info(
+    "**Data sources:** Price data from Yahoo Finance (historical, point-in-time). "
+    "Fundamental data (P/E, ROE, revenue growth, D/E) from **SEC EDGAR**, using only "
+    "filings submitted on or before each rebalance date (+ 2-day buffer). "
+    "VIX regime thresholds use walk-forward design: estimated on the in-sample period only.\n\n"
+    "**Remaining limitations:** (1) The ticker universe is user-defined and static — companies "
+    "that were delisted or went bankrupt during the backtest are excluded if not in the list "
+    "(survivorship bias). (2) XBRL coverage is sparse before ~2012. "
+    "(3) This is not a live trading system."
 )
 
 if not run:
@@ -855,9 +1011,10 @@ if top_n > len(tickers):
     st.error("Holdings can't exceed the ticker count.")
     st.stop()
 
-benchmark = benchmark.strip().upper()
+benchmark  = benchmark.strip().upper()
 vix_ticker = vix_ticker.strip().upper()
 
+# ── Download prices ───────────────────────────────────────────────────────────
 with st.spinner("Prices"):
     prices = download_prices(tickers, start, end)
 
@@ -867,8 +1024,10 @@ if prices.empty or prices.shape[0] < 80:
 
 missing_px = [t for t in tickers if t not in prices.columns]
 if missing_px:
-    st.warning("Dropped (no price data): " + ", ".join(missing_px[:12]) + (" ..." if len(missing_px) > 12 else ""))
+    st.warning("Dropped (no price data): " + ", ".join(missing_px[:12]) +
+               (" …" if len(missing_px) > 12 else ""))
 
+# ── Download benchmark ────────────────────────────────────────────────────────
 with st.spinner(f"Benchmark ({benchmark})"):
     bench_df = download_prices([benchmark], start, end)
     bench_px = bench_df[benchmark] if benchmark in bench_df.columns else None
@@ -877,68 +1036,82 @@ if bench_px is None or bench_px.dropna().empty:
     st.error("Benchmark not found. Try a liquid ETF (SPY, QQQ, IWM) or a valid ticker.")
     st.stop()
 
-with st.spinner("Fundamentals"):
-    # sorted() stabilizes the cache key (reduces cache misses)
-    fundamentals = fetch_fundamentals(sorted(list(prices.columns))).reindex(prices.columns)
+# ── Build PIT rebalance date list ─────────────────────────────────────────────
+_all_rebal = prices.resample(rebalance).last().index
+_all_rebal = _all_rebal[_all_rebal.isin(prices.index)]
+rebal_dates_for_fund = tuple(_all_rebal.tolist())
 
-failures = int(fundamentals.attrs.get("failures", 0))
-rate_limited = int(fundamentals.attrs.get("rate_limited", 0))
-n_f = int(fundamentals.attrs.get("n", max(1, len(fundamentals))))
-fund_missing_rate = float(fundamentals.isna().mean().mean())
+# ── Download PIT fundamentals from SEC EDGAR ──────────────────────────────────
+with st.spinner("Fundamentals — SEC EDGAR (first run takes ~1 min; cached after that)"):
+    pit_fund_matrix = build_pit_fund_matrix(
+        tickers     = tuple(sorted(prices.columns.tolist())),
+        rebal_dates = rebal_dates_for_fund,
+        prices      = prices,
+        budget_s    = 120.0,
+    )
 
-if rate_limited > 0:
-    st.warning("Yahoo Finance is rate-limiting requests right now. Fundamentals may be incomplete; try again later.")
-elif failures > 0 and failures / max(1, n_f) > 0.15:
-    st.warning("Some fundamentals could not be fetched today. Results may be slightly noisier.")
+# Report coverage
+fund_vals = pd.concat(pit_fund_matrix.values()) if pit_fund_matrix else pd.DataFrame()
+if not fund_vals.empty:
+    missing_rate = float(fund_vals.isna().mean().mean())
+    if missing_rate > 0.6:
+        st.warning(
+            f"EDGAR fundamental coverage is low ({100*(1-missing_rate):.0f}% of cells filled). "
+            "This is normal for non-US tickers or tickers with little XBRL history before 2013. "
+            "Missing values score as average (z=0) and don't distort rankings."
+        )
 
-if fund_missing_rate > 0.6:
-    st.warning("Many fundamentals are missing from the data source. Treat results as directional.")
-
+# ── Run backtest ──────────────────────────────────────────────────────────────
 with st.spinner("Backtest"):
     out = backtest(
-        prices=prices,
-        fundamentals=fundamentals,
-        bench_px=bench_px,
-        top_n=int(top_n),
-        rebalance=rebalance,
-        mom_lb=int(mom_lb),
-        vol_lb=int(vol_lb),
-        weights=weights,
-        tc_bps_per_100_turnover=float(tc),
+        prices                  = prices,
+        pit_fund_matrix         = pit_fund_matrix,
+        bench_px                = bench_px,
+        top_n                   = int(top_n),
+        rebalance               = rebalance,
+        mom_lb                  = int(mom_lb),
+        vol_lb                  = int(vol_lb),
+        weights                 = weights,
+        tc_bps_per_100_turnover = float(tc),
     )
 
 if out.gross.empty or out.net.empty:
     st.error("No returns produced. Try Monthly rebalancing or a later start date.")
     st.stop()
 
-eq = equity_df(out.gross, out.net, out.bench, bench_name=benchmark)
+eq         = equity_df(out.gross, out.net, out.bench, bench_name=benchmark)
 net_equity = eq["Portfolio (Net)"]
 
+# ── Top-of-page summary pills ─────────────────────────────────────────────────
 s1, s2, s3, s4 = st.columns(4)
-s1.metric("Universe", f"{len(prices.columns)}")
-s2.metric("Range", f"{safe_date_str(eq.index.min())} → {safe_date_str(eq.index.max())}")
+s1.metric("Universe",  f"{len(prices.columns)}")
+s2.metric("Range",     f"{safe_date_str(eq.index.min())} → {safe_date_str(eq.index.max())}")
 s3.metric("Rebalance", rebalance_label)
-s4.metric("Profile", profile)
+s4.metric("Profile",   profile)
 
+# ── Tabs ──────────────────────────────────────────────────────────────────────
 tab_overview, tab_holdings, tab_regimes, tab_risk, tab_downloads, tab_method = st.tabs(
     ["Overview", "Holdings", "VIX", "Risk", "Downloads", "Method"]
 )
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tab: Overview
+# ═══════════════════════════════════════════════════════════════════════════════
 with tab_overview:
     st.subheader("Overview")
     st.pyplot(equity_fig(eq), clear_figure=True)
 
     stats_all = regime_stats("All", out.net, out.bench)
     c1, c2, c3, c4, c5, c6 = st.columns(6)
-    c1.metric("CAGR", fmt_pct(cagr(net_equity), 2))
-    c2.metric("Max drawdown", fmt_pct(max_drawdown(net_equity), 2))
-    c3.metric("Annual return", fmt_pct(stats_all["ann_return"], 2))
-    c4.metric("Annual vol", fmt_pct(stats_all["ann_vol"], 2))
-    c5.metric("Sharpe", fmt_num(stats_all["sharpe"], 2))
+    c1.metric("CAGR",            fmt_pct(cagr(net_equity), 2))
+    c2.metric("Max drawdown",    fmt_pct(max_drawdown(net_equity), 2))
+    c3.metric("Annual return",   fmt_pct(stats_all["ann_return"], 2))
+    c4.metric("Annual vol",      fmt_pct(stats_all["ann_vol"], 2))
+    c5.metric("Sharpe",          fmt_num(stats_all["sharpe"], 2))
     c6.metric(f"Info vs {benchmark}", fmt_num(stats_all["info_ratio"], 2))
 
     st.subheader("Drawdown (net)")
-    dd = drawdown_series(net_equity)
+    dd  = drawdown_series(net_equity)
     fig = plt.figure(figsize=(10, 3.8))
     plt.plot(dd.index, dd.values, linewidth=2)
     plt.title("Drawdown")
@@ -948,9 +1121,12 @@ with tab_overview:
     plt.tight_layout()
     st.pyplot(fig, clear_figure=True)
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tab: Holdings
+# ═══════════════════════════════════════════════════════════════════════════════
 with tab_holdings:
     st.subheader("Holdings")
-    st.caption("Pick a rebalance date to see ranks and inputs.")
+    st.caption("Pick a rebalance date to see factor scores and raw inputs.")
 
     momentum_all, vol_all = compute_price_factors(prices, mom_lb=mom_lb, vol_lb=vol_lb)
     valid_dates = [d for d in out.rebal_dates if d in prices.index]
@@ -962,16 +1138,17 @@ with tab_holdings:
     else:
         chosen = st.select_slider(
             "Rebalance date",
-            options=valid_dates,
-            value=valid_dates[-1],
-            format_func=lambda d: safe_date_str(d),
+            options    = valid_dates,
+            value      = valid_dates[-1],
+            format_func= lambda d: safe_date_str(d),
         )
 
-        scores_full = make_scores_full(
-            momentum_all.loc[chosen],
-            vol_all.loc[chosen],
-            fundamentals,
-            weights=weights,
+        scores_full = make_scores_pit(
+            date            = chosen,
+            momentum_row    = momentum_all.loc[chosen],
+            vol_row         = vol_all.loc[chosen],
+            pit_fund_matrix = pit_fund_matrix,
+            weights         = weights,
         ).sort_values(["score", "mom_z"], ascending=False)
 
         cols = [
@@ -984,58 +1161,123 @@ with tab_holdings:
         with st.expander("Change log"):
             st.dataframe(out.holdings_changes, use_container_width=True, height=360)
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tab: VIX regimes
+# ═══════════════════════════════════════════════════════════════════════════════
 with tab_regimes:
     st.subheader("VIX regimes")
     st.caption("Same metrics, split by volatility conditions from VIX.")
 
+    # Determine the walk-forward split date
+    if use_wf:
+        if split_date_in and split_date_in.strip():
+            wf_split = pd.Timestamp(split_date_in.strip())
+        else:
+            # Auto: first 70% of the price date range
+            idx    = prices.index
+            cutoff = idx[int(len(idx) * 0.70)]
+            wf_split = pd.Timestamp(cutoff)
+    else:
+        wf_split = None
+
     with st.spinner("VIX"):
         vix_close = download_close(vix_ticker, start, end)
-        regimes_raw = compute_vix_regimes(vix_close, int(vix_smooth), float(low_q), float(high_q))
+        regimes_raw, lo_thr, hi_thr = compute_vix_regimes(
+            vix_close   = vix_close,
+            smooth_days = int(vix_smooth),
+            low_q       = float(low_q),
+            high_q      = float(high_q),
+            split_date  = wf_split,
+        )
         regimes = regimes_raw.reindex(out.net.index).ffill()
 
-        df = pd.DataFrame({"net": out.net, "bench": out.bench, "regime": regimes}).dropna()
-        low = df[df["regime"] == "low_vol"]
-        high = df[df["regime"] == "high_vol"]
+        df_reg = pd.DataFrame({
+            "net":    out.net,
+            "bench":  out.bench,
+            "regime": regimes,
+        }).dropna()
+
+        low_mask  = df_reg["regime"] == "low_vol"
+        high_mask = df_reg["regime"] == "high_vol"
 
         regime_summary = pd.DataFrame([
-            safe_regime_row("All days", df["net"], df["bench"], min_days=30),
-            safe_regime_row("Low VIX", low["net"], low["bench"], min_days=30),
-            safe_regime_row("High VIX", high["net"], high["bench"], min_days=30),
+            safe_regime_row("All days", df_reg["net"],             df_reg["bench"],              min_days=30),
+            safe_regime_row("Low VIX",  df_reg.loc[low_mask, "net"],  df_reg.loc[low_mask, "bench"],  min_days=30),
+            safe_regime_row("High VIX", df_reg.loc[high_mask, "net"], df_reg.loc[high_mask, "bench"], min_days=30),
         ])
+
+    if wf_split:
+        st.caption(
+            f"Walk-forward: VIX thresholds estimated on data before "
+            f"**{wf_split.date()}** (in-sample). "
+            f"Low ≤ {lo_thr:.1f}, High ≥ {hi_thr:.1f}. "
+            f"Thresholds applied to the full period without re-fitting."
+        )
+    else:
+        st.caption(f"Full-sample thresholds: Low ≤ {lo_thr:.1f}, High ≥ {hi_thr:.1f}.")
 
     st.dataframe(
         regime_summary.style.format(
-            {"ann_return": "{:.2%}", "ann_vol": "{:.2%}", "sharpe": "{:.2f}", "sortino": "{:.2f}", "info_ratio": "{:.2f}"},
+            {"ann_return": "{:.2%}", "ann_vol": "{:.2%}",
+             "sharpe": "{:.2f}", "sortino": "{:.2f}", "info_ratio": "{:.2f}"},
             na_rep="—",
         ),
         use_container_width=True,
     )
 
-    regime_counts = df["regime"].value_counts().reindex(["low_vol", "mid", "high_vol"]).fillna(0).astype(int)
+    regime_counts = (
+        df_reg["regime"]
+        .value_counts()
+        .reindex(["low_vol", "mid", "high_vol"])
+        .fillna(0).astype(int)
+    )
     regime_counts.index = ["Low", "Mid", "High"]
     st.bar_chart(regime_counts)
 
+    if wf_split:
+        # Show in-sample vs out-of-sample regime breakdown
+        st.subheader("In-sample vs out-of-sample")
+        is_mask  = df_reg.index < wf_split
+        oos_mask = df_reg.index >= wf_split
+
+        is_summary = pd.DataFrame([
+            safe_regime_row("IS All",      df_reg.loc[is_mask, "net"],  df_reg.loc[is_mask, "bench"],  30),
+            safe_regime_row("IS Low VIX",  df_reg.loc[is_mask & low_mask, "net"],  df_reg.loc[is_mask & low_mask, "bench"],  30),
+            safe_regime_row("IS High VIX", df_reg.loc[is_mask & high_mask, "net"], df_reg.loc[is_mask & high_mask, "bench"], 30),
+            safe_regime_row("OOS All",     df_reg.loc[oos_mask, "net"], df_reg.loc[oos_mask, "bench"], 30),
+            safe_regime_row("OOS Low VIX", df_reg.loc[oos_mask & low_mask, "net"],  df_reg.loc[oos_mask & low_mask, "bench"],  30),
+            safe_regime_row("OOS High VIX",df_reg.loc[oos_mask & high_mask, "net"], df_reg.loc[oos_mask & high_mask, "bench"], 30),
+        ])
+        st.dataframe(
+            is_summary.style.format(
+                {"ann_return": "{:.2%}", "ann_vol": "{:.2%}",
+                 "sharpe": "{:.2f}", "sortino": "{:.2f}", "info_ratio": "{:.2f}"},
+                na_rep="—",
+            ),
+            use_container_width=True,
+        )
+        st.caption(
+            "IS = in-sample (thresholds estimated here). "
+            "OOS = out-of-sample (thresholds applied, not re-estimated). "
+            "OOS regime persistence is the key research finding."
+        )
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tab: Risk
+# ═══════════════════════════════════════════════════════════════════════════════
 with tab_risk:
     st.subheader("Risk metrics")
     st.caption("Additional risk and performance statistics.")
 
-    # Compute all metrics
     b = out.bench
     p = out.net
 
     risk_data = {
         "Metric": [
-            "CAGR",
-            "Annualized return",
-            "Annualized volatility",
-            "Max drawdown",
-            "Sharpe ratio",
-            "Sortino ratio",
-            "Calmar ratio",
-            "Beta to benchmark",
-            "Tracking error",
-            "Information ratio",
-            "Average turnover",
+            "CAGR", "Annualized return", "Annualized volatility",
+            "Max drawdown", "Sharpe ratio", "Sortino ratio",
+            "Calmar ratio", "Beta to benchmark", "Tracking error",
+            "Information ratio", "Average turnover",
         ],
         "Value": [
             cagr(net_equity),
@@ -1053,71 +1295,81 @@ with tab_risk:
     }
 
     risk_df = pd.DataFrame(risk_data)
-    # Format for display
+
     def fmt_risk_row(row):
-        if row["Metric"] in ["CAGR", "Annualized return", "Annualized volatility", "Max drawdown", "Average turnover"]:
-            return fmt_pct(row["Value"], 2) if row["Metric"] != "Average turnover" else fmt_num(row["Value"], 2)
+        pct_metrics = {"CAGR", "Annualized return", "Annualized volatility", "Max drawdown"}
+        if row["Metric"] in pct_metrics:
+            return fmt_pct(row["Value"], 2)
+        if row["Metric"] == "Average turnover":
+            return fmt_num(row["Value"], 4)
         return fmt_num(row["Value"], 2)
 
     risk_df["Display"] = risk_df.apply(fmt_risk_row, axis=1)
-    st.dataframe(risk_df[["Metric", "Display"]].rename(columns={"Display": "Value"}), use_container_width=True, hide_index=True)
+    st.dataframe(
+        risk_df[["Metric", "Display"]].rename(columns={"Display": "Value"}),
+        use_container_width=True,
+        hide_index=True,
+    )
 
     st.subheader("Transaction cost sensitivity")
     st.caption("How net performance changes with different cost assumptions.")
 
     tc_sens = []
     for tc_test in [0, 5, 10, 25, 50, 100]:
-        # Re-run backtest with different cost
         out_test = backtest(
-            prices=prices,
-            fundamentals=fundamentals,
-            bench_px=bench_px,
-            top_n=int(top_n),
-            rebalance=rebalance,
-            mom_lb=int(mom_lb),
-            vol_lb=int(vol_lb),
-            weights=weights,
-            tc_bps_per_100_turnover=float(tc_test),
+            prices                  = prices,
+            pit_fund_matrix         = pit_fund_matrix,
+            bench_px                = bench_px,
+            top_n                   = int(top_n),
+            rebalance               = rebalance,
+            mom_lb                  = int(mom_lb),
+            vol_lb                  = int(vol_lb),
+            weights                 = weights,
+            tc_bps_per_100_turnover = float(tc_test),
         )
-        eq_test = equity_df(out_test.gross, out_test.net, out_test.bench, bench_name=benchmark)
-        net_eq_test = eq_test["Portfolio (Net)"]
+        eq_t    = equity_df(out_test.gross, out_test.net, out_test.bench, bench_name=benchmark)
+        net_eq_t = eq_t["Portfolio (Net)"]
         tc_sens.append({
             "Cost (bps/100% turn)": tc_test,
-            "CAGR": cagr(net_eq_test),
-            "Sharpe": sharpe_ratio(out_test.net),
-            "Max DD": max_drawdown(net_eq_test),
+            "CAGR":     cagr(net_eq_t),
+            "Sharpe":   sharpe_ratio(out_test.net),
+            "Max DD":   max_drawdown(net_eq_t),
         })
 
     tc_df = pd.DataFrame(tc_sens)
     st.dataframe(
-        tc_df.style.format({"CAGR": "{:.2%}", "Sharpe": "{:.2f}", "Max DD": "{:.2%}"}, na_rep="—"),
+        tc_df.style.format(
+            {"CAGR": "{:.2%}", "Sharpe": "{:.2f}", "Max DD": "{:.2%}"},
+            na_rep="—",
+        ),
         use_container_width=True,
     )
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tab: Downloads
+# ═══════════════════════════════════════════════════════════════════════════════
 with tab_downloads:
     st.subheader("Downloads")
 
     st.download_button(
         "Equity curves (CSV)",
-        data=eq.to_csv(index=True).encode("utf-8"),
-        file_name="equity_curves.csv",
-        mime="text/csv",
+        data      = eq.to_csv(index=True).encode("utf-8"),
+        file_name = "equity_curves.csv",
+        mime      = "text/csv",
     )
 
-    reg_csv = regime_summary.to_csv(index=False).encode("utf-8")
     st.download_button(
         "Regime summary (CSV)",
-        data=reg_csv,
-        file_name="regime_summary.csv",
-        mime="text/csv",
+        data      = regime_summary.to_csv(index=False).encode("utf-8"),
+        file_name = "regime_summary.csv",
+        mime      = "text/csv",
     )
 
-    risk_csv = risk_df.to_csv(index=False).encode("utf-8")
     st.download_button(
         "Risk metrics (CSV)",
-        data=risk_csv,
-        file_name="risk_metrics.csv",
-        mime="text/csv",
+        data      = risk_df.to_csv(index=False).encode("utf-8"),
+        file_name = "risk_metrics.csv",
+        mime      = "text/csv",
     )
 
     try:
@@ -1127,33 +1379,49 @@ with tab_downloads:
             out.holdings_changes.to_excel(writer, index=False, sheet_name="holdings_changes")
         st.download_button(
             "Holdings log (Excel)",
-            data=bio.getvalue(),
-            file_name="holdings_changes.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            data      = bio.getvalue(),
+            file_name = "holdings_changes.xlsx",
+            mime      = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
     except Exception:
         st.caption("Excel export needs openpyxl.")
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tab: Method
+# ═══════════════════════════════════════════════════════════════════════════════
 with tab_method:
     st.subheader("Method")
     st.markdown(
         f"""
 **Construction**
-- Fixed universe (editable)
-- Rebalance on a schedule
-- Rank stocks, take top **N**, equal-weight
+- User-defined ticker universe (editable in sidebar)
+- Rebalance on a schedule (monthly / quarterly / weekly)
+- Rank stocks by composite score; hold top N equal-weighted
 
 **Signals**
-- Value: trailing P/E (lower is better)
-- Profit: ROE (higher is better)
-- Growth: revenue growth (higher is better)
-- Risk: volatility + debt-to-equity (lower is better)
-- Momentum: tie-breaker
+- Value: trailing P/E computed from SEC EDGAR (lower is better)
+- Profit: ROE from SEC EDGAR (higher is better)
+- Growth: year-on-year revenue growth from SEC EDGAR (higher is better)
+- Risk: annualized realized volatility from price history (lower is better)
+- Risk: debt/equity from SEC EDGAR (lower is better)
+- Momentum: 12-month trailing return — tie-breaker only, not in weighted score
 
 **Scoring**
 - Winsorize at 1st / 99th percentile
 - Cross-sectional z-scores
-- Weighted sum; missing z-scores filled with 0 (treated as average)
+- Weighted sum; missing z-scores filled with 0 (treated as cross-sectional average)
+
+**Point-in-time fundamental data**
+- Source: SEC EDGAR XBRL filings (free, no API key required)
+- Only filings with `filed` date ≤ rebalance date − 2 days are used
+- P/E is computed as price ÷ (trailing-12-month net income ÷ shares outstanding)
+  using only earnings data that had been publicly filed at each rebalance date
+- Concept fallback chains handle the fact that companies use different XBRL tags
+
+**VIX regime classification — walk-forward design**
+- VIX quantile thresholds are estimated on the **in-sample period only** (before split date)
+- The same thresholds are applied to the full period without re-estimation
+- This prevents the regime labels from incorporating future VIX distribution information
 
 **Costs**
 - Turnover-based cost applied on rebalance days
@@ -1162,10 +1430,13 @@ with tab_method:
 **Risk metrics**
 - Sharpe, Sortino, Calmar, beta, tracking error, information ratio
 
-**Important limitations**
-1. **Fundamentals are a current snapshot from yfinance**, not point-in-time historical fundamentals. A backtest from 2017 uses today's P/E ratios for all periods. Results are directional/educational only.
-2. No sector or liquidity constraints.
-3. Equal-weighting may not reflect real-world capacity or execution.
-4. Benchmark is **{benchmark}**.
+**Remaining limitations**
+1. Static ticker universe — companies delisted during the backtest are excluded
+   if not in the user's list (survivorship bias). Use a dynamic index constituent
+   file to address this.
+2. XBRL coverage is sparse before ~2012; fundamental signals will be mostly NaN
+   for early periods.
+3. This is not a live trading system. Equal-weighting ignores liquidity and capacity.
+4. Benchmark: **{benchmark}**.
         """.strip()
     )
