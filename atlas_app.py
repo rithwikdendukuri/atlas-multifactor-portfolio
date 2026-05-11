@@ -14,6 +14,7 @@ import scipy.stats as stats
 import yfinance as yf
 import matplotlib.pyplot as plt
 import streamlit as st
+import scipy
 
 try:
     from yfinance.exceptions import YFRateLimitError
