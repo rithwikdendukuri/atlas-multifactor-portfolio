@@ -3,6 +3,7 @@ from __future__ import annotations
 import warnings
 import time
 import random
+import threading
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
@@ -11,6 +12,11 @@ import pandas as pd
 import yfinance as yf
 import matplotlib.pyplot as plt
 import streamlit as st
+
+try:
+    from yfinance.exceptions import YFRateLimitError
+except Exception:
+    YFRateLimitError = Exception
 
 warnings.filterwarnings("ignore")
 plt.rcParams["figure.dpi"] = 140
@@ -326,6 +332,44 @@ def sharpe_ratio(r: pd.Series) -> float:
     return r.mean() / sd * np.sqrt(252)
 
 
+def sortino_ratio(r: pd.Series) -> float:
+    """Sharpe using downside deviation only."""
+    downside = r[r < 0]
+    dd = downside.std()
+    if len(r) < 2 or dd == 0 or np.isnan(dd):
+        return np.nan
+    return r.mean() / dd * np.sqrt(252)
+
+
+def calmar_ratio(equity: pd.Series) -> float:
+    """CAGR / |max drawdown|."""
+    c = cagr(equity)
+    mdd = max_drawdown(equity)
+    if np.isnan(c) or np.isnan(mdd) or mdd == 0:
+        return np.nan
+    return c / abs(mdd)
+
+
+def beta(p: pd.Series, b: pd.Series) -> float:
+    """Portfolio beta to benchmark."""
+    df = pd.DataFrame({"p": p, "b": b}).dropna()
+    if len(df) < 2:
+        return np.nan
+    cov = df["p"].cov(df["b"])
+    var = df["b"].var()
+    if var == 0 or np.isnan(var):
+        return np.nan
+    return float(cov / var)
+
+
+def tracking_error(p: pd.Series, b: pd.Series) -> float:
+    """Annualized std of active returns."""
+    diff = (p - b).dropna()
+    if len(diff) < 2:
+        return np.nan
+    return diff.std() * np.sqrt(252)
+
+
 def info_ratio(p: pd.Series, b: pd.Series) -> float:
     diff = (p - b).dropna()
     sd = diff.std()
@@ -378,21 +422,6 @@ def download_close(ticker: str, start: str, end: Optional[str]) -> pd.Series:
 # -----------------------------
 # Robust fundamentals fetching
 # -----------------------------
-try:
-    from yfinance.exceptions import YFRateLimitError
-except Exception:
-    YFRateLimitError = Exception
-
-
-@st.cache_data(show_spinner=False, ttl=24 * 60 * 60)  # 24h
-def fetch_fundamentals(tickers: List[str]) -> pd.DataFrame:
-   import threading
-
-try:
-    from yfinance.exceptions import YFRateLimitError
-except Exception:
-    YFRateLimitError = Exception
-
 
 def _get_info_with_timeout(ticker: str, timeout_s: float = 2.0) -> Dict:
     """
@@ -464,7 +493,7 @@ def fetch_fundamentals(tickers: List[str]) -> pd.DataFrame:
 
         if not info:
             # distinguish timeout vs other failure (best-effort)
-            # (we can’t perfectly detect timeout here, but empty after timeout wrapper is a good proxy)
+            # (we can't perfectly detect timeout here, but empty after timeout wrapper is a good proxy)
             timeouts += 1
 
         if not info:
@@ -671,13 +700,14 @@ def regime_stats(name: str, p: pd.Series, b: pd.Series) -> dict:
         "ann_return": float(annualized_return(p)),
         "ann_vol": float(annualized_vol(p)),
         "sharpe": float(sharpe_ratio(p)),
+        "sortino": float(sortino_ratio(p)),
         "info_ratio": float(info_ratio(p, b)),
     }
 
 
 def safe_regime_row(label: str, p: pd.Series, b: pd.Series, min_days: int = 30) -> dict:
     if len(p.dropna()) < min_days:
-        return {"regime": label, "days": int(len(p.dropna())), "ann_return": np.nan, "ann_vol": np.nan, "sharpe": np.nan, "info_ratio": np.nan}
+        return {"regime": label, "days": int(len(p.dropna())), "ann_return": np.nan, "ann_vol": np.nan, "sharpe": np.nan, "sortino": np.nan, "info_ratio": np.nan}
     return regime_stats(label, p, b)
 
 
@@ -746,6 +776,14 @@ with st.sidebar:
         low_q = st.slider("Low quantile", 0.05, 0.49, float(DEFAULT_LOW_Q), 0.01)
         high_q = st.slider("High quantile", 0.51, 0.95, float(DEFAULT_HIGH_Q), 0.01)
 
+    st.markdown("**Lookback windows**")
+    if advanced:
+        mom_lb = st.number_input("Momentum lookback (days)", 63, 504, int(DEFAULT_MOM_LB), 21)
+        vol_lb = st.number_input("Volatility lookback (days)", 63, 504, int(DEFAULT_VOL_LB), 21)
+    else:
+        mom_lb = DEFAULT_MOM_LB
+        vol_lb = DEFAULT_VOL_LB
+
     st.markdown("**Weights**")
     auto_norm = st.toggle("Normalize weights", value=True)
 
@@ -794,6 +832,17 @@ This uses historical data and is for learning and research.
     """.strip()
 )
 
+st.warning(
+    """
+**Important limitation:** Fundamentals (P/E, ROE, revenue growth, debt-to-equity) are pulled as a 
+**current snapshot** from Yahoo Finance, not as point-in-time historical data. 
+This means a backtest from 2017 uses 2026 fundamentals for all periods. 
+**Results are directional/educational only** and should not be interpreted as true 
+historical performance. For research-grade backtesting, use a point-in-time 
+fundamental database (e.g., Quandl/Sharadar, Compustat via WRDS).
+    """.strip()
+)
+
 if not run:
     st.info("Choose settings in the sidebar, then click **Run**.")
     st.stop()
@@ -803,7 +852,7 @@ if len(tickers) < 5:
     st.stop()
 
 if top_n > len(tickers):
-    st.error("Holdings can’t exceed the ticker count.")
+    st.error("Holdings can't exceed the ticker count.")
     st.stop()
 
 benchmark = benchmark.strip().upper()
@@ -852,8 +901,8 @@ with st.spinner("Backtest"):
         bench_px=bench_px,
         top_n=int(top_n),
         rebalance=rebalance,
-        mom_lb=int(DEFAULT_MOM_LB),
-        vol_lb=int(DEFAULT_VOL_LB),
+        mom_lb=int(mom_lb),
+        vol_lb=int(vol_lb),
         weights=weights,
         tc_bps_per_100_turnover=float(tc),
     )
@@ -871,8 +920,8 @@ s2.metric("Range", f"{safe_date_str(eq.index.min())} → {safe_date_str(eq.index
 s3.metric("Rebalance", rebalance_label)
 s4.metric("Profile", profile)
 
-tab_overview, tab_holdings, tab_regimes, tab_downloads, tab_method = st.tabs(
-    ["Overview", "Holdings", "VIX", "Downloads", "Method"]
+tab_overview, tab_holdings, tab_regimes, tab_risk, tab_downloads, tab_method = st.tabs(
+    ["Overview", "Holdings", "VIX", "Risk", "Downloads", "Method"]
 )
 
 with tab_overview:
@@ -903,7 +952,7 @@ with tab_holdings:
     st.subheader("Holdings")
     st.caption("Pick a rebalance date to see ranks and inputs.")
 
-    momentum_all, vol_all = compute_price_factors(prices, mom_lb=DEFAULT_MOM_LB, vol_lb=DEFAULT_VOL_LB)
+    momentum_all, vol_all = compute_price_factors(prices, mom_lb=mom_lb, vol_lb=vol_lb)
     valid_dates = [d for d in out.rebal_dates if d in prices.index]
     if len(valid_dates) > 160:
         valid_dates = valid_dates[-160:]
@@ -956,7 +1005,7 @@ with tab_regimes:
 
     st.dataframe(
         regime_summary.style.format(
-            {"ann_return": "{:.2%}", "ann_vol": "{:.2%}", "sharpe": "{:.2f}", "info_ratio": "{:.2f}"},
+            {"ann_return": "{:.2%}", "ann_vol": "{:.2%}", "sharpe": "{:.2f}", "sortino": "{:.2f}", "info_ratio": "{:.2f}"},
             na_rep="—",
         ),
         use_container_width=True,
@@ -965,6 +1014,85 @@ with tab_regimes:
     regime_counts = df["regime"].value_counts().reindex(["low_vol", "mid", "high_vol"]).fillna(0).astype(int)
     regime_counts.index = ["Low", "Mid", "High"]
     st.bar_chart(regime_counts)
+
+with tab_risk:
+    st.subheader("Risk metrics")
+    st.caption("Additional risk and performance statistics.")
+
+    # Compute all metrics
+    b = out.bench
+    p = out.net
+
+    risk_data = {
+        "Metric": [
+            "CAGR",
+            "Annualized return",
+            "Annualized volatility",
+            "Max drawdown",
+            "Sharpe ratio",
+            "Sortino ratio",
+            "Calmar ratio",
+            "Beta to benchmark",
+            "Tracking error",
+            "Information ratio",
+            "Average turnover",
+        ],
+        "Value": [
+            cagr(net_equity),
+            annualized_return(p),
+            annualized_vol(p),
+            max_drawdown(net_equity),
+            sharpe_ratio(p),
+            sortino_ratio(p),
+            calmar_ratio(net_equity),
+            beta(p, b),
+            tracking_error(p, b),
+            info_ratio(p, b),
+            out.avg_turn,
+        ],
+    }
+
+    risk_df = pd.DataFrame(risk_data)
+    # Format for display
+    def fmt_risk_row(row):
+        if row["Metric"] in ["CAGR", "Annualized return", "Annualized volatility", "Max drawdown", "Average turnover"]:
+            return fmt_pct(row["Value"], 2) if row["Metric"] != "Average turnover" else fmt_num(row["Value"], 2)
+        return fmt_num(row["Value"], 2)
+
+    risk_df["Display"] = risk_df.apply(fmt_risk_row, axis=1)
+    st.dataframe(risk_df[["Metric", "Display"]].rename(columns={"Display": "Value"}), use_container_width=True, hide_index=True)
+
+    st.subheader("Transaction cost sensitivity")
+    st.caption("How net performance changes with different cost assumptions.")
+
+    tc_sens = []
+    for tc_test in [0, 5, 10, 25, 50, 100]:
+        # Re-run backtest with different cost
+        out_test = backtest(
+            prices=prices,
+            fundamentals=fundamentals,
+            bench_px=bench_px,
+            top_n=int(top_n),
+            rebalance=rebalance,
+            mom_lb=int(mom_lb),
+            vol_lb=int(vol_lb),
+            weights=weights,
+            tc_bps_per_100_turnover=float(tc_test),
+        )
+        eq_test = equity_df(out_test.gross, out_test.net, out_test.bench, bench_name=benchmark)
+        net_eq_test = eq_test["Portfolio (Net)"]
+        tc_sens.append({
+            "Cost (bps/100% turn)": tc_test,
+            "CAGR": cagr(net_eq_test),
+            "Sharpe": sharpe_ratio(out_test.net),
+            "Max DD": max_drawdown(net_eq_test),
+        })
+
+    tc_df = pd.DataFrame(tc_sens)
+    st.dataframe(
+        tc_df.style.format({"CAGR": "{:.2%}", "Sharpe": "{:.2f}", "Max DD": "{:.2%}"}, na_rep="—"),
+        use_container_width=True,
+    )
 
 with tab_downloads:
     st.subheader("Downloads")
@@ -981,6 +1109,14 @@ with tab_downloads:
         "Regime summary (CSV)",
         data=reg_csv,
         file_name="regime_summary.csv",
+        mime="text/csv",
+    )
+
+    risk_csv = risk_df.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        "Risk metrics (CSV)",
+        data=risk_csv,
+        file_name="risk_metrics.csv",
         mime="text/csv",
     )
 
@@ -1015,15 +1151,21 @@ with tab_method:
 - Momentum: tie-breaker
 
 **Scoring**
-- Winsorize
+- Winsorize at 1st / 99th percentile
 - Cross-sectional z-scores
-- Weighted sum
+- Weighted sum; missing z-scores filled with 0 (treated as average)
 
 **Costs**
 - Turnover-based cost applied on rebalance days
+- Default: {DEFAULT_TC_BPS_PER_100_TURNOVER} bps per 100% turnover
 
-**Notes**
-- Fundamentals are a current snapshot from yfinance (not point-in-time historical fundamentals)
-- Benchmark is **{benchmark}**
+**Risk metrics**
+- Sharpe, Sortino, Calmar, beta, tracking error, information ratio
+
+**Important limitations**
+1. **Fundamentals are a current snapshot from yfinance**, not point-in-time historical fundamentals. A backtest from 2017 uses today's P/E ratios for all periods. Results are directional/educational only.
+2. No sector or liquidity constraints.
+3. Equal-weighting may not reflect real-world capacity or execution.
+4. Benchmark is **{benchmark}**.
         """.strip()
     )
