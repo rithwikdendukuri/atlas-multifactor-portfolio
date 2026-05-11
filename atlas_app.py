@@ -10,11 +10,11 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 import requests
+import scipy
 import scipy.stats as stats
 import yfinance as yf
 import matplotlib.pyplot as plt
 import streamlit as st
-import scipy
 
 try:
     from yfinance.exceptions import YFRateLimitError
