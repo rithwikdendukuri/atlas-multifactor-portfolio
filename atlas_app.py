@@ -1038,9 +1038,8 @@ def compute_factor_diagnostics(
     else:
         corr = pd.DataFrame()
     return ic_summary, ic_long, decay_summary, corr
-
-        )
-    else:
+   
+else:
         decay_summary = pd.DataFrame()
 
     if exposure_frames:
