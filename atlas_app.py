@@ -1652,7 +1652,7 @@ tab_overview, tab_holdings, tab_regimes, tab_risk, tab_stats, tab_diagnostics, t
 )
 
 st.warning("Not enough rebalance dates to display holdings.")
-else:
+    else:
     chosen = st.select_slider(
         "Rebalance date",
          options=valid_dates,
