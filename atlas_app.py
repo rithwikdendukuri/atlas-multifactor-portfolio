@@ -1021,7 +1021,7 @@ def compute_factor_diagnostics(
         hit = ic_long.assign(pos=ic_long["ic"] > 0).groupby("factor")["pos"].mean().rename("positive_rate")
         ic_summary = ic_summary.merge(hit, on="factor", how="left").sort_values("mean_ic", ascending=False)
 
-   decay = pd.DataFrame(decay_rows)
+decay = pd.DataFrame(decay_rows)
 
 if not decay.empty:
     decay_summary = (
