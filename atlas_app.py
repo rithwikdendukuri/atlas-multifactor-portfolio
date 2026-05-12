@@ -1029,7 +1029,7 @@ def compute_factor_diagnostics(
         .reset_index()
         .rename(columns={"ic": "mean_ic"})
     )
-else:
+    else:
     decay_summary = pd.DataFrame()
 
 if exposure_frames:
