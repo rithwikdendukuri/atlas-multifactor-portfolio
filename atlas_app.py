@@ -1047,7 +1047,7 @@ if exposure_frames:
         corr = exposure_all[factor_cols].rename(columns=FACTOR_LABELS).corr()
 else:
         corr = pd.DataFrame()
-    return ic_summary, ic_long, decay_summary, corr
+return ic_summary, ic_long, decay_summary, corr
 
 
 # =============================================================================
