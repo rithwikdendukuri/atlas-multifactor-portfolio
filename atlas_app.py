@@ -1042,7 +1042,7 @@ else:
 
 return ic_summary, ic_long, decay_summary, corr
 
-    if exposure_frames:
+if exposure_frames:
         exposure_all = pd.concat(exposure_frames, ignore_index=True)
         corr = exposure_all[factor_cols].rename(columns=FACTOR_LABELS).corr()
     else:
