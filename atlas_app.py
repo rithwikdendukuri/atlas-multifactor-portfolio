@@ -1023,24 +1023,22 @@ def compute_factor_diagnostics(
 
     decay = pd.DataFrame(decay_rows)
     if not decay.empty:
-        decay_summary = (
-            decay.groupby(["factor", "horizon_days"])["ic"]
-            .mean()
-            .reset_index()
-            .rename(columns={"ic": "mean_ic"})
-        )
-    else:
-        decay_summary = pd.DataFrame()
+    decay_summary = (
+        decay.groupby(["factor", "horizon_days"])["ic"]
+        .mean()
+        .reset_index()
+        .rename(columns={"ic": "mean_ic"})
+    )
+else:
+    decay_summary = pd.DataFrame()
 
-    if exposure_frames:
-        exposure_all = pd.concat(exposure_frames, ignore_index=True)
-        corr = exposure_all[factor_cols].rename(columns=FACTOR_LABELS).corr()
-    else:
-        corr = pd.DataFrame()
-    return ic_summary, ic_long, decay_summary, corr
-   
-    else:
-        decay_summary = pd.DataFrame()
+if exposure_frames:
+    exposure_all = pd.concat(exposure_frames, ignore_index=True)
+    corr = exposure_all[factor_cols].rename(columns=FACTOR_LABELS).corr()
+else:
+    corr = pd.DataFrame()
+
+return ic_summary, ic_long, decay_summary, corr
 
     if exposure_frames:
         exposure_all = pd.concat(exposure_frames, ignore_index=True)
