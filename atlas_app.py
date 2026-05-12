@@ -1651,40 +1651,48 @@ tab_overview, tab_holdings, tab_regimes, tab_risk, tab_stats, tab_diagnostics, t
     ["Overview", "Holdings", "VIX", "Risk", "Stats", "Diagnostics", "Validation", "Construction", "Downloads", "Method", "Factor Engine"]
 )
 
-st.warning("Not enough rebalance dates to display holdings.")
-    else:
+if not valid_dates:
+    st.warning("Not enough rebalance dates to display holdings.")
+else:
     chosen = st.select_slider(
         "Rebalance date",
-         options=valid_dates,
+        options=valid_dates,
         value=valid_dates[-1],
         format_func=lambda d: safe_date_str(d),
-        )
+    )
+
     scores_full = make_scores_pit(
-            date=chosen,
-            momentum_row=momentum_all.loc[chosen],
-            vol_row=vol_all.loc[chosen],
-            pit_fund_matrix=pit_fund_matrix,
-            weights=weights,
-        ).sort_values(["score", "mom_z"], ascending=False)
+        date=chosen,
+        momentum_row=momentum_all.loc[chosen],
+        vol_row=vol_all.loc[chosen],
+        pit_fund_matrix=pit_fund_matrix,
+        weights=weights,
+    ).sort_values(["score", "mom_z"], ascending=False)
+
     chosen_picks = scores_full.head(int(top_n)).index.tolist()
+
     chosen_weights = portfolio_weights(
-            weighting,
-            chosen_picks,
-            vol_all.loc[chosen],
-            prices.pct_change(),
-            chosen,
-            int(vol_lb),
-        )
-        cols = [
-            "score",
-            "value_pe", "profit_roe", "growth_rev", "risk_vol", "risk_de", "mom_12m",
-            "z_value_pe", "z_profit_roe", "z_growth_rev", "z_risk_vol", "z_risk_de", "z_mom_12m",
-        ]
-        display_scores = scores_full.head(int(top_n))[cols].copy()
-        display_scores.insert(0, "weight", chosen_weights.reindex(display_scores.index))
-        st.dataframe(display_scores, use_container_width=True, height=560)
-        with st.expander("Change log"):
-            st.dataframe(out.holdings_changes, use_container_width=True, height=360)
+        weighting,
+        chosen_picks,
+        vol_all.loc[chosen],
+        prices.pct_change(),
+        chosen,
+        int(vol_lb),
+    )
+
+    cols = [
+        "score",
+        "value_pe", "profit_roe", "growth_rev", "risk_vol", "risk_de", "mom_12m",
+        "z_value_pe", "z_profit_roe", "z_growth_rev", "z_risk_vol", "z_risk_de", "z_mom_12m",
+    ]
+
+    display_scores = scores_full.head(int(top_n))[cols].copy()
+    display_scores.insert(0, "weight", chosen_weights.reindex(display_scores.index))
+
+    st.dataframe(display_scores, use_container_width=True, height=560)
+
+    with st.expander("Change log"):
+        st.dataframe(out.holdings_changes, use_container_width=True, height=360)
 
 
 with tab_regimes:
