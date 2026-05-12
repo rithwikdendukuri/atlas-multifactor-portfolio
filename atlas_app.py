@@ -1299,14 +1299,14 @@ def backtest(
             "held": ", ".join(sorted(picks)),
             "weights": weights_txt,
         })
-        period = prices.loc[d0:d1, picks].pct_change().dropna(how="all")
-        if period.empty:
-            continue
-        aligned_w = curr_weights.reindex(period.columns).fillna(0)
-        g = period.fillna(0).dot(aligned_w)
-        n = apply_costs(g, turn, tc_bps_per_100_turnover)
-        gross.append(g)
-        net.append(n)
+    period = prices.loc[d0:d1, picks].pct_change().dropna(how="all")
+    if period.empty:
+        continue
+    aligned_w = curr_weights.reindex(period.columns).fillna(0)
+    g = period.fillna(0).dot(aligned_w)
+    n = apply_costs(g, turn, tc_bps_per_100_turnover)
+    gross.append(g)
+    net.append(n)
     gross = pd.concat(gross) if gross else pd.Series(dtype=float)
     net = pd.concat(net) if net else pd.Series(dtype=float)
     bench = bench_px.pct_change().reindex(gross.index).dropna()
