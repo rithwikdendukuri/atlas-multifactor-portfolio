@@ -1275,19 +1275,19 @@ def backtest(
             pit_fund_matrix=pit_fund_matrix,
             weights=weights,
         )
-        picks = scores.sort_values(["score", "mom_z"], ascending=False).head(top_n).index.tolist()
-        curr_weights = portfolio_weights(weighting, picks, vol.loc[d0], daily_returns, d0, vol_lb)
-        added = sorted(set(picks) - set(prev_picks)) if prev_picks else sorted(picks)
-        removed = sorted(set(prev_picks) - set(picks)) if prev_picks else []
-        stayed = sorted(set(picks) & set(prev_picks)) if prev_picks else []
-        holding_turn = portfolio_turnover(prev_picks, picks)
-        turn = weight_turnover(prev_weights, curr_weights)
-        prev_picks = picks
-        prev_weights = curr_weights
-        turns.append(turn)
-        weights_txt = ", ".join(f"{t}:{curr_weights.loc[t]:.3f}" for t in curr_weights.index)
-        holdings_log.append({
-            "rebalance_date": pd.Timestamp(d0).date().isoformat(),
+    picks = scores.sort_values(["score", "mom_z"], ascending=False).head(top_n).index.tolist()
+    curr_weights = portfolio_weights(weighting, picks, vol.loc[d0], daily_returns, d0, vol_lb)
+    added = sorted(set(picks) - set(prev_picks)) if prev_picks else sorted(picks)
+    removed = sorted(set(prev_picks) - set(picks)) if prev_picks else []
+    stayed = sorted(set(picks) & set(prev_picks)) if prev_picks else []
+    holding_turn = portfolio_turnover(prev_picks, picks)
+    turn = weight_turnover(prev_weights, curr_weights)
+    prev_picks = picks
+    prev_weights = curr_weights
+    turns.append(turn)
+    weights_txt = ", ".join(f"{t}:{curr_weights.loc[t]:.3f}" for t in curr_weights.index)
+    holdings_log.append({
+        "rebalance_date": pd.Timestamp(d0).date().isoformat(),
             "num_held": len(picks),
             "num_added": len(added),
             "num_removed": len(removed),
