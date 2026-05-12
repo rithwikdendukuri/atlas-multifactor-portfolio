@@ -2012,7 +2012,7 @@ with tab_construction:
 
 
   st.dataframe(
-    comp_df.style.format(
+        comp_df.style.format(
         {
             "CAGR": "{:.2%}",
             "ann_vol": "{:.2%}",
