@@ -1023,7 +1023,7 @@ def compute_factor_diagnostics(
 
     decay = pd.DataFrame(decay_rows)
     if not decay.empty:
-    decay_summary = (
+        decay_summary = (
         decay.groupby(["factor", "horizon_days"])["ic"]
         .mean()
         .reset_index()
