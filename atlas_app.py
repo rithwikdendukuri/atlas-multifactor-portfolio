@@ -2011,40 +2011,47 @@ with tab_construction:
     )
 
 
-                "CAGR": "{:.2%}",
-                "ann_vol": "{:.2%}",
-                "max_dd": "{:.2%}",
-                "sharpe": "{:.2f}",
-                "info_ratio": "{:.2f}",
-                "avg_turnover": "{:.4f}",
-            },
-            na_rep="-",
-        ),
-        use_container_width=True,
-        hide_index=True,
-    )
+  st.dataframe(
+    comp_df.style.format(
+        {
+            "CAGR": "{:.2%}",
+            "ann_vol": "{:.2%}",
+            "max_dd": "{:.2%}",
+            "sharpe": "{:.2f}",
+            "info_ratio": "{:.2f}",
+            "avg_turnover": "{:.4f}",
+        },
+        na_rep="-",
+    ),
+    use_container_width=True,
+    hide_index=True,
+)
 
 
 with tab_downloads:
     st.subheader("Downloads")
+
     st.download_button(
         "Equity curves (CSV)",
         data=eq.to_csv(index=True).encode("utf-8"),
         file_name="equity_curves.csv",
         mime="text/csv",
     )
+
     st.download_button(
         "Regime summary (CSV)",
         data=regime_summary.to_csv(index=False).encode("utf-8"),
         file_name="regime_summary.csv",
         mime="text/csv",
     )
+
     st.download_button(
         "Risk metrics (CSV)",
         data=risk_df.to_csv(index=False).encode("utf-8"),
         file_name="risk_metrics.csv",
         mime="text/csv",
     )
+
     if "ic_summary" in locals() and not ic_summary.empty:
         st.download_button(
             "IC summary (CSV)",
@@ -2052,6 +2059,7 @@ with tab_downloads:
             file_name="ic_summary.csv",
             mime="text/csv",
         )
+
     if "comp_df" in locals() and not comp_df.empty:
         st.download_button(
             "Construction comparison (CSV)",
@@ -2059,16 +2067,23 @@ with tab_downloads:
             file_name="construction_comparison.csv",
             mime="text/csv",
         )
+
     try:
         bio = io.BytesIO()
         with pd.ExcelWriter(bio, engine="openpyxl") as writer:
-            out.holdings_changes.to_excel(writer, index=False, sheet_name="holdings_changes")
+            out.holdings_changes.to_excel(
+                writer,
+                index=False,
+                sheet_name="holdings_changes"
+            )
+
         st.download_button(
             "Holdings log (Excel)",
             data=bio.getvalue(),
             file_name="holdings_changes.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
+
     except Exception:
         st.caption("Excel export needs openpyxl.")
 
