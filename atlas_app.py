@@ -1021,15 +1021,16 @@ def compute_factor_diagnostics(
         hit = ic_long.assign(pos=ic_long["ic"] > 0).groupby("factor")["pos"].mean().rename("positive_rate")
         ic_summary = ic_summary.merge(hit, on="factor", how="left").sort_values("mean_ic", ascending=False)
 
-    decay = pd.DataFrame(decay_rows)
-    if not decay.empty:
-        decay_summary = (
+   decay = pd.DataFrame(decay_rows)
+
+if not decay.empty:
+    decay_summary = (
         decay.groupby(["factor", "horizon_days"])["ic"]
         .mean()
         .reset_index()
         .rename(columns={"ic": "mean_ic"})
     )
-    else:
+else:
     decay_summary = pd.DataFrame()
 
 if exposure_frames:
@@ -1037,6 +1038,7 @@ if exposure_frames:
     corr = exposure_all[factor_cols].rename(columns=FACTOR_LABELS).corr()
 else:
     corr = pd.DataFrame()
+
 
 return ic_summary, ic_long, decay_summary, corr
 
