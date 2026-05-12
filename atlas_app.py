@@ -1268,7 +1268,7 @@ def backtest(
         rebal_dates=rebal_dates,
         weighting=weighting,
     )
-        scores = make_scores_pit(
+    scores = make_scores_pit(
             date=d0,
             momentum_row=momentum.loc[d0],
             vol_row=vol.loc[d0],
