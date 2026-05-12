@@ -1652,22 +1652,22 @@ tab_overview, tab_holdings, tab_regimes, tab_risk, tab_stats, tab_diagnostics, t
 )
 
 st.warning("Not enough rebalance dates to display holdings.")
-    else:
-        chosen = st.select_slider(
-            "Rebalance date",
-            options=valid_dates,
-            value=valid_dates[-1],
-            format_func=lambda d: safe_date_str(d),
+else:
+    chosen = st.select_slider(
+        "Rebalance date",
+         options=valid_dates,
+        value=valid_dates[-1],
+        format_func=lambda d: safe_date_str(d),
         )
-        scores_full = make_scores_pit(
+    scores_full = make_scores_pit(
             date=chosen,
             momentum_row=momentum_all.loc[chosen],
             vol_row=vol_all.loc[chosen],
             pit_fund_matrix=pit_fund_matrix,
             weights=weights,
         ).sort_values(["score", "mom_z"], ascending=False)
-        chosen_picks = scores_full.head(int(top_n)).index.tolist()
-        chosen_weights = portfolio_weights(
+    chosen_picks = scores_full.head(int(top_n)).index.tolist()
+    chosen_weights = portfolio_weights(
             weighting,
             chosen_picks,
             vol_all.loc[chosen],
