@@ -1651,7 +1651,7 @@ tab_overview, tab_holdings, tab_regimes, tab_risk, tab_stats, tab_diagnostics, t
     ["Overview", "Holdings", "VIX", "Risk", "Stats", "Diagnostics", "Validation", "Construction", "Downloads", "Method", "Factor Engine"]
 )
 
-        st.warning("Not enough rebalance dates to display holdings.")
+st.warning("Not enough rebalance dates to display holdings.")
     else:
         chosen = st.select_slider(
             "Rebalance date",
