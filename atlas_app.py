@@ -1860,6 +1860,7 @@ with tab_stats:
 with tab_diagnostics:
     st.subheader("Factor diagnostics")
     st.caption("Information coefficients are Spearman rank correlations between factor exposures and later returns.")
+
     with st.spinner("Computing factor IC, IC decay, and correlations"):
         ic_summary, ic_long, decay_summary, factor_corr = compute_factor_diagnostics(
             prices=prices,
@@ -1870,6 +1871,8 @@ with tab_diagnostics:
             weights=weights,
         )
 
+        st.dataframe(
+            ic_summary.style.format(
                 {
                     "mean_ic": "{:.4f}",
                     "std_ic": "{:.4f}",
@@ -1881,18 +1884,30 @@ with tab_diagnostics:
             use_container_width=True,
             hide_index=True,
         )
+
     st.markdown("**IC decay**")
     if decay_summary.empty:
         st.warning("Not enough data to compute IC decay.")
     else:
-        decay_pivot = decay_summary.pivot(index="horizon_days", columns="factor", values="mean_ic")
+        decay_pivot = decay_summary.pivot(
+            index="horizon_days",
+            columns="factor",
+            values="mean_ic"
+        )
         st.line_chart(decay_pivot)
-        st.dataframe(decay_pivot.style.format("{:.4f}", na_rep="-"), use_container_width=True)
+        st.dataframe(
+            decay_pivot.style.format("{:.4f}", na_rep="-"),
+            use_container_width=True
+        )
+
     st.markdown("**Factor correlation matrix**")
     if factor_corr.empty:
         st.warning("Not enough data to compute factor correlations.")
     else:
-        st.dataframe(factor_corr.style.format("{:.2f}", na_rep="-"), use_container_width=True)
+        st.dataframe(
+            factor_corr.style.format("{:.2f}", na_rep="-"),
+            use_container_width=True
+        )
 
 
 with tab_validation:
@@ -1901,12 +1916,15 @@ with tab_validation:
         "The same selected factor model and weighting method are evaluated before and after the split date. "
         "This does not re-optimize weights; it checks whether behavior persists out of sample."
     )
+
     st.metric("Split date", safe_date_str(model_split))
+
     split_rows = pd.DataFrame([
         performance_row("Full period", out.net, out.bench),
         performance_row("In-sample", out.net[out.net.index < model_split], out.bench),
         performance_row("Out-of-sample", out.net[out.net.index >= model_split], out.bench),
     ])
+
     st.dataframe(
         split_rows.style.format(
             {
@@ -1923,6 +1941,7 @@ with tab_validation:
         use_container_width=True,
         hide_index=True,
     )
+
     split_eq = pd.DataFrame({
         "Portfolio (Net)": net_equity,
         f"Benchmark ({benchmark})": eq[f"Benchmark ({benchmark})"],
@@ -1933,6 +1952,7 @@ with tab_validation:
 with tab_construction:
     st.subheader("Portfolio construction comparison")
     st.caption("Same stock-selection model, three portfolio weighting rules.")
+
     comparison = {}
     for label, method in {
         "Equal weight": "equal",
@@ -1951,9 +1971,14 @@ with tab_construction:
             tc_bps_per_100_turnover=float(tc),
             weighting=method,
         )
-    comp_curves = pd.DataFrame({label: (1 + result.net).cumprod() for label, result in comparison.items()})
+
+    comp_curves = pd.DataFrame({
+        label: (1 + result.net).cumprod()
+        for label, result in comparison.items()
+    })
     comp_curves[f"Benchmark ({benchmark})"] = (1 + out.bench).cumprod()
     st.line_chart(comp_curves)
+
     comp_rows = []
     for label, result in comparison.items():
         eq_c = (1 + result.net).cumprod()
@@ -1966,7 +1991,9 @@ with tab_construction:
             "info_ratio": info_ratio(result.net, result.bench),
             "avg_turnover": result.avg_turn,
         })
+
     comp_df = pd.DataFrame(comp_rows)
+
     st.dataframe(
         comp_df.style.format(
             {
@@ -1982,6 +2009,7 @@ with tab_construction:
         use_container_width=True,
         hide_index=True,
     )
+
 
                 "CAGR": "{:.2%}",
                 "ann_vol": "{:.2%}",
