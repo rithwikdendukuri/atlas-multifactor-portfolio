@@ -1995,24 +1995,7 @@ with tab_construction:
     comp_df = pd.DataFrame(comp_rows)
 
     st.dataframe(
-        comp_df.style.format(
-            {
-                "CAGR": "{:.2%}",
-                "ann_vol": "{:.2%}",
-                "max_dd": "{:.2%}",
-                "sharpe": "{:.2f}",
-                "info_ratio": "{:.2f}",
-                "avg_turnover": "{:.4f}",
-            },
-            na_rep="-",
-        ),
-        use_container_width=True,
-        hide_index=True,
-    )
-
-
-  st.dataframe(
-        comp_df.style.format(
+    comp_df.style.format(
         {
             "CAGR": "{:.2%}",
             "ann_vol": "{:.2%}",
@@ -2026,6 +2009,23 @@ with tab_construction:
     use_container_width=True,
     hide_index=True,
 )
+
+st.dataframe(
+    comp_df.style.format(
+        {
+            "CAGR": "{:.2%}",
+            "ann_vol": "{:.2%}",
+            "max_dd": "{:.2%}",
+            "sharpe": "{:.2f}",
+            "info_ratio": "{:.2f}",
+            "avg_turnover": "{:.4f}",
+        },
+        na_rep="-",
+    ),
+    use_container_width=True,
+    hide_index=True,
+)
+
 
 
 with tab_downloads:
