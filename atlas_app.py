@@ -200,8 +200,6 @@ def vix_regime(vix: pd.Series, smooth=63):
     r[v >= hi] = "high"
     return r
 
-    return r
-
 
 def summary(r: pd.Series):
     eq = (1 + r).cumprod()
@@ -730,39 +728,6 @@ def build_pit_fund_matrix(
         result[date_ts.isoformat()] = df
     return result
 
-    facts_by_ticker: Dict[str, dict] = {}
-    n = len(tickers_list)
-    progress = st.progress(0, text="Downloading SEC EDGAR filings...")
-    for i, tick in enumerate(tickers_list):
-        if (time.monotonic() - t0) > budget_s:
-            for t in tickers_list[i:]:
-                facts_by_ticker[t] = {}
-            break
-        cik = cik_map.get(tick.upper().replace(".", "-"))
-        facts_by_ticker[tick] = fetch_company_facts(cik) if cik else {}
-        time.sleep(0.12)
-        progress.progress((i + 1) / max(n, 1), text=f"EDGAR: {tick} ({i+1}/{n})")
-    progress.empty()
-    result: Dict[str, pd.DataFrame] = {}
-    for date in rebal_dates:
-        date_ts = pd.Timestamp(date)
-        rows = []
-        for tick in tickers_list:
-            px_val = np.nan
-            if date_ts in prices.index and tick in prices.columns:
-                px_val = float(prices.loc[date_ts, tick])
-            row = _pit_snapshot_one(
-                ticker=tick,
-                facts=facts_by_ticker.get(tick, {}),
-                as_of=date_ts,
-                price=px_val,
-            )
-            row["ticker"] = tick
-            rows.append(row)
-        df = pd.DataFrame(rows).set_index("ticker")
-        result[date_ts.isoformat()] = df
-    return result
-
 
 # =============================================================================
 # PRICE DATA
@@ -1021,31 +986,24 @@ def compute_factor_diagnostics(
         hit = ic_long.assign(pos=ic_long["ic"] > 0).groupby("factor")["pos"].mean().rename("positive_rate")
         ic_summary = ic_summary.merge(hit, on="factor", how="left").sort_values("mean_ic", ascending=False)
 
-decay = pd.DataFrame(decay_rows)
+    decay = pd.DataFrame(decay_rows)
 
-if not decay.empty:
-    decay_summary = (
-        decay.groupby(["factor", "horizon_days"])["ic"]
-        .mean()
-        .reset_index()
-        .rename(columns={"ic": "mean_ic"})
-    )
-else:
-    decay_summary = pd.DataFrame()
+    if not decay.empty:
+        decay_summary = (
+            decay.groupby(["factor", "horizon_days"])["ic"]
+            .mean()
+            .reset_index()
+            .rename(columns={"ic": "mean_ic"})
+        )
+    else:
+        decay_summary = pd.DataFrame()
 
-if exposure_frames:
-    exposure_all = pd.concat(exposure_frames, ignore_index=True)
-    corr = exposure_all[factor_cols].rename(columns=FACTOR_LABELS).corr()
-else:
-    corr = pd.DataFrame()
-    return ic_summary, ic_long, decay_summary, corr
-
-if exposure_frames:
+    if exposure_frames:
         exposure_all = pd.concat(exposure_frames, ignore_index=True)
         corr = exposure_all[factor_cols].rename(columns=FACTOR_LABELS).corr()
-else:
+    else:
         corr = pd.DataFrame()
-return ic_summary, ic_long, decay_summary, corr
+    return ic_summary, ic_long, decay_summary, corr
 
 
 # =============================================================================
@@ -1163,33 +1121,6 @@ class BacktestOutput:
     holdings_changes: pd.DataFrame
     rebal_dates: pd.DatetimeIndex
     weighting: str
-def portfolio_weights(
-    method: str,
-    picks: List[str],
-    vol_row: pd.Series,
-    returns: pd.DataFrame,
-    date: pd.Timestamp,
-    lookback: int,
-) -> pd.Series:
-    if len(picks) == 0:
-        return pd.Series(dtype=float)
-    if method == "risk_parity":
-        return normalize_series_weights(1 / vol_row.reindex(picks).replace(0, np.nan), picks)
-    if method == "min_variance":
-        hist = returns.loc[:date, picks].tail(int(lookback))
-        return min_variance_weights(hist, picks)
-    return pd.Series(1.0 / len(picks), index=picks)
-
-
-@dataclass
-class BacktestOutput:
-    gross: pd.Series
-    net: pd.Series
-    bench: pd.Series
-    avg_turn: float
-    holdings_changes: pd.DataFrame
-    rebal_dates: pd.DatetimeIndex
-    weighting: str
 
 
 def backtest(
@@ -1266,59 +1197,7 @@ def backtest(
         rebal_dates=rebal_dates,
         weighting=weighting,
     )
-    scores = make_scores_pit(
-            date=d0,
-            momentum_row=momentum.loc[d0],
-            vol_row=vol.loc[d0],
-            pit_fund_matrix=pit_fund_matrix,
-            weights=weights,
-        )
-    picks = scores.sort_values(["score", "mom_z"], ascending=False).head(top_n).index.tolist()
-    curr_weights = portfolio_weights(weighting, picks, vol.loc[d0], daily_returns, d0, vol_lb)
-    added = sorted(set(picks) - set(prev_picks)) if prev_picks else sorted(picks)
-    removed = sorted(set(prev_picks) - set(picks)) if prev_picks else []
-    stayed = sorted(set(picks) & set(prev_picks)) if prev_picks else []
-    holding_turn = portfolio_turnover(prev_picks, picks)
-    turn = weight_turnover(prev_weights, curr_weights)
-    prev_picks = picks
-    prev_weights = curr_weights
-    turns.append(turn)
-    weights_txt = ", ".join(f"{t}:{curr_weights.loc[t]:.3f}" for t in curr_weights.index)
-    holdings_log.append({
-        "rebalance_date": pd.Timestamp(d0).date().isoformat(),
-            "num_held": len(picks),
-            "num_added": len(added),
-            "num_removed": len(removed),
-            "turnover_fraction": None if np.isnan(turn) else float(turn),
-            "holding_turnover_fraction": None if np.isnan(holding_turn) else float(holding_turn),
-            "added": ", ".join(added),
-            "removed": ", ".join(removed),
-            "stayed": ", ".join(stayed),
-            "held": ", ".join(sorted(picks)),
-            "weights": weights_txt,
-        })
-    period = prices.loc[d0:d1, picks].pct_change().dropna(how="all")
-    if period.empty:
-        continue
-    aligned_w = curr_weights.reindex(period.columns).fillna(0)
-    g = period.fillna(0).dot(aligned_w)
-    n = apply_costs(g, turn, tc_bps_per_100_turnover)
-    gross.append(g)
-    net.append(n)
-    gross = pd.concat(gross) if gross else pd.Series(dtype=float)
-    net = pd.concat(net) if net else pd.Series(dtype=float)
-    bench = bench_px.pct_change().reindex(gross.index).dropna()
-    gross = gross.reindex(bench.index)
-    net = net.reindex(bench.index)
-    return BacktestOutput(
-        gross=gross,
-        net=net,
-        bench=bench,
-        avg_turn=float(np.nanmean(turns)) if turns else np.nan,
-        holdings_changes=pd.DataFrame(holdings_log),
-        rebal_dates=rebal_dates,
-        weighting=weighting,
-    )
+  
 
 
 # =============================================================================
@@ -1511,7 +1390,7 @@ st.caption("A rules-based stock ranking model with a backtest, factor diagnostic
 st.subheader("What this is")
 st.markdown(
     """
-Atlas lets you test a simple idea: rank stocks with measurable signals, hold the top names, and rebalance on a schedule.
+Atlas lets you customize and build your own portfolio, complete with analysis and simulations.
 
 - Pick a universe of stocks, including a current S&P 500 list from Wikipedia
 - Choose equal weighting, risk parity, or long-only minimum variance weighting
@@ -1523,30 +1402,7 @@ This uses historical data and is for learning and research.
     """.strip()
 )
 st.info(
-    "**Data sources:** Price data from Yahoo Finance. Fundamental data from SEC EDGAR, using only filings "
-    "submitted on or before each rebalance date plus a 2-day buffer. VIX regime thresholds can use "
-    "walk-forward design. Fama-French 3-factor data is downloaded from the Ken French data library.\n\n"
-    "**Remaining limitations:** The ticker universe is static over the backtest unless you provide a "
-    "point-in-time constituent file. Current S&P 500 constituents from Wikipedia reduce manual setup, "
-    "but do not remove survivorship bias because delisted and removed names are absent."
-)
-
-st.subheader("What this is")
-st.markdown(
-    """
-Atlas lets you test a simple idea: rank stocks with measurable signals, hold the top names, and rebalance on a schedule.
-
-- Pick a universe of stocks, including a current S&P 500 list from Wikipedia
-- Choose equal weighting, risk parity, or long-only minimum variance weighting
-- Compare the result to any benchmark ticker
-- Test FF3 alpha with Newey-West standard errors and the Harvey-Liu-Zhu t-stat hurdle
-- Inspect IC, IC decay, factor correlations, and IS/OOS behavior
-
-This uses historical data and is for learning and research.
-    """.strip()
-)
-st.info(
-    "**Data sources:** Price data from Yahoo Finance. Fundamental data from SEC EDGAR, using only filings "
+    "**Data sources:** Fundamental data from SEC EDGAR, using only filings "
     "submitted on or before each rebalance date plus a 2-day buffer. VIX regime thresholds can use "
     "walk-forward design. Fama-French 3-factor data is downloaded from the Ken French data library.\n\n"
     "**Remaining limitations:** The ticker universe is static over the backtest unless you provide a "
@@ -1993,22 +1849,6 @@ with tab_construction:
     comp_df = pd.DataFrame(comp_rows)
 
     st.dataframe(
-    comp_df.style.format(
-        {
-            "CAGR": "{:.2%}",
-            "ann_vol": "{:.2%}",
-            "max_dd": "{:.2%}",
-            "sharpe": "{:.2f}",
-            "info_ratio": "{:.2f}",
-            "avg_turnover": "{:.4f}",
-        },
-        na_rep="-",
-    ),
-    use_container_width=True,
-    hide_index=True,
-)
-
-st.dataframe(
     comp_df.style.format(
         {
             "CAGR": "{:.2%}",
