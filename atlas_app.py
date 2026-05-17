@@ -1345,13 +1345,13 @@ def drawdown_series(equity: pd.Series) -> pd.Series:
 st.markdown("**Weights**")
 auto_norm = st.toggle("Normalize weights", value=True)
 w = dict(DEFAULT_WEIGHTS)
-    if profile == "Conservative":
+if profile == "Conservative":
         w = {"value_pe": 0.15, "profit_roe": 0.15, "growth_rev": 0.15,
              "risk_vol": 0.30, "risk_de": 0.25}
     elif profile == "Aggressive":
         w = {"value_pe": 0.15, "profit_roe": 0.30, "growth_rev": 0.30,
              "risk_vol": 0.15, "risk_de": 0.10}
-    if profile == "Custom" or advanced:
+if profile == "Custom" or advanced:
         w["value_pe"] = st.slider("Value (P/E)", 0.0, 1.0, float(w["value_pe"]), 0.05)
         w["profit_roe"] = st.slider("Profit (ROE)", 0.0, 1.0, float(w["profit_roe"]), 0.05)
         w["growth_rev"] = st.slider("Growth (rev)", 0.0, 1.0, float(w["growth_rev"]), 0.05)
