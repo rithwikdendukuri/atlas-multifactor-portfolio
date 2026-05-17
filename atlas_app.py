@@ -1357,26 +1357,26 @@ if profile == "Custom" or advanced:
         w["growth_rev"] = st.slider("Growth (rev)", 0.0, 1.0, float(w["growth_rev"]), 0.05)
         w["risk_vol"] = st.slider("Risk (vol)", 0.0, 1.0, float(w["risk_vol"]), 0.05)
         w["risk_de"] = st.slider("Risk (debt)", 0.0, 1.0, float(w["risk_de"]), 0.05)
-    weights = normalize_weights(w) if auto_norm else w
-    st.caption(f"Weight sum: {sum(weights.values()):.2f}")
+weights = normalize_weights(w) if auto_norm else w
+st.caption(f"Weight sum: {sum(weights.values()):.2f}")
 
-    st.markdown("**Universe**")
-    universe_source = st.selectbox(
-        "Universe source",
-        ["Default sample", "Current S&P 500 (Wikipedia)", "Custom tickers"],
-        index=0,
+st.markdown("**Universe**")
+universe_source = st.selectbox(
+    "Universe source",
+    ["Default sample", "Current S&P 500 (Wikipedia)", "Custom tickers"],
+    index=0,
     )
-    sp500_meta = pd.DataFrame()
-    sp500_error = None
-    if universe_source == "Current S&P 500 (Wikipedia)":
-        try:
-            sp500_meta = fetch_sp500_constituents()
-            tickers = sp500_meta["ticker"].tolist()
-            st.caption(f"Loaded {len(tickers)} current S&P 500 constituents.")
-        except Exception as exc:
-            sp500_error = str(exc)
-            st.warning("Could not load Wikipedia constituents; using default sample.")
-            tickers = DEFAULT_TICKERS
+sp500_meta = pd.DataFrame()
+sp500_error = None
+if universe_source == "Current S&P 500 (Wikipedia)":
+    try:
+        sp500_meta = fetch_sp500_constituents()
+        tickers = sp500_meta["ticker"].tolist()
+        st.caption(f"Loaded {len(tickers)} current S&P 500 constituents.")
+    except Exception as exc:
+        sp500_error = str(exc)
+        st.warning("Could not load Wikipedia constituents; using default sample.")
+        tickers = DEFAULT_TICKERS
     elif universe_source == "Custom tickers":
         tickers_text = st.text_area("Tickers", ", ".join(DEFAULT_TICKERS), height=120)
         tickers = clean_ticker_list(tickers_text)
