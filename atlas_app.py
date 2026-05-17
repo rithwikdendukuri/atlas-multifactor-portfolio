@@ -1377,9 +1377,9 @@ if universe_source == "Current S&P 500 (Wikipedia)":
         sp500_error = str(exc)
         st.warning("Could not load Wikipedia constituents; using default sample.")
         tickers = DEFAULT_TICKERS
-    elif universe_source == "Custom tickers":
-        tickers_text = st.text_area("Tickers", ", ".join(DEFAULT_TICKERS), height=120)
-        tickers = clean_ticker_list(tickers_text)
+elif universe_source == "Custom tickers":
+    tickers_text = st.text_area("Tickers", ", ".join(DEFAULT_TICKERS), height=120)
+    tickers = clean_ticker_list(tickers_text)
     else:
         tickers = DEFAULT_TICKERS
     st.divider()
