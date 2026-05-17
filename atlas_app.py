@@ -1343,7 +1343,7 @@ def drawdown_series(equity: pd.Series) -> pd.Series:
         vol_lb = DEFAULT_VOL_LB
 
    st.markdown("**Weights**")
-    auto_norm = st.toggle("Normalize weights", value=True)
+   auto_norm = st.toggle("Normalize weights", value=True)
     w = dict(DEFAULT_WEIGHTS)
     if profile == "Conservative":
         w = {"value_pe": 0.15, "profit_roe": 0.15, "growth_rev": 0.15,
