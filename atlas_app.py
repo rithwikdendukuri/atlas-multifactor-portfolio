@@ -1629,9 +1629,7 @@ with tab_regimes:
             ),
             use_container_width=True,
         )
-        if row["Metric"] == "Average turnover":
-                return fmt_num(row["Value"], 4)
-                return fmt_num(row["Value"], 2)
+
 
     risk_df["Display"] = risk_df.apply(fmt_risk_row, axis=1)
     st.dataframe(
