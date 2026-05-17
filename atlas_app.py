@@ -1287,8 +1287,8 @@ def drawdown_series(equity: pd.Series) -> pd.Series:
 # =============================================================================
 # STREAMLIT APP
 # =============================================================================
-    st.subheader("Settings")
-    profile = st.selectbox("Profile", ["Balanced", "Conservative", "Aggressive", "Custom"], index=0)
+st.subheader("Settings")
+profile = st.selectbox("Profile", ["Balanced", "Conservative", "Aggressive", "Custom"], index=0)
 
     st.markdown("**Dates**")
     start = st.text_input("Start", value=DEFAULT_START)
