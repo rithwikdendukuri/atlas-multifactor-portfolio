@@ -1342,7 +1342,7 @@ def drawdown_series(equity: pd.Series) -> pd.Series:
         mom_lb = DEFAULT_MOM_LB
         vol_lb = DEFAULT_VOL_LB
 
-    st.markdown("**Weights**")
+   st.markdown("**Weights**")
     auto_norm = st.toggle("Normalize weights", value=True)
     w = dict(DEFAULT_WEIGHTS)
     if profile == "Conservative":
@@ -1361,10 +1361,10 @@ def drawdown_series(equity: pd.Series) -> pd.Series:
     st.caption(f"Weight sum: {sum(weights.values()):.2f}")
 
     st.markdown("**Universe**")
-universe_source = st.selectbox(
-     "Universe source",
-     ["Default sample", "Current S&P 500 (Wikipedia)", "Custom tickers"],
-     index=0,
+    universe_source = st.selectbox(
+        "Universe source",
+        ["Default sample", "Current S&P 500 (Wikipedia)", "Custom tickers"],
+        index=0,
     )
     sp500_meta = pd.DataFrame()
     sp500_error = None
