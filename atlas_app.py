@@ -1348,7 +1348,7 @@ w = dict(DEFAULT_WEIGHTS)
 if profile == "Conservative":
         w = {"value_pe": 0.15, "profit_roe": 0.15, "growth_rev": 0.15,
              "risk_vol": 0.30, "risk_de": 0.25}
-    elif profile == "Aggressive":
+elif profile == "Aggressive":
         w = {"value_pe": 0.15, "profit_roe": 0.30, "growth_rev": 0.30,
              "risk_vol": 0.15, "risk_de": 0.10}
 if profile == "Custom" or advanced:
