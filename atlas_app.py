@@ -1361,10 +1361,10 @@ def drawdown_series(equity: pd.Series) -> pd.Series:
     st.caption(f"Weight sum: {sum(weights.values()):.2f}")
 
     st.markdown("**Universe**")
-    universe_source = st.selectbox(
-        "Universe source",
-        ["Default sample", "Current S&P 500 (Wikipedia)", "Custom tickers"],
-        index=0,
+universe_source = st.selectbox(
+     "Universe source",
+     ["Default sample", "Current S&P 500 (Wikipedia)", "Custom tickers"],
+     index=0,
     )
     sp500_meta = pd.DataFrame()
     sp500_error = None
