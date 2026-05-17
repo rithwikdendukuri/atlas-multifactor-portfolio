@@ -1380,10 +1380,10 @@ if universe_source == "Current S&P 500 (Wikipedia)":
 elif universe_source == "Custom tickers":
     tickers_text = st.text_area("Tickers", ", ".join(DEFAULT_TICKERS), height=120)
     tickers = clean_ticker_list(tickers_text)
-    else:
-        tickers = DEFAULT_TICKERS
-    st.divider()
-    run = st.button("Run", type="primary")
+else:
+    tickers = DEFAULT_TICKERS
+st.divider()
+run = st.button("Run", type="primary")
 
 st.title("Atlas")
 st.caption("A rules-based stock ranking model with a backtest, factor diagnostics, and statistical tests.")
